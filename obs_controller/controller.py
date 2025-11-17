@@ -375,6 +375,7 @@ class GimbalSend(threading.Thread):
 
     def stop(self):
         """Stop the controller thread."""
+        self.send_speed(0.0, 0.0)
         self._new_msg_event.set()
         self._kill_switch.set()
 
@@ -391,21 +392,27 @@ class GimbPIController(threading.Thread):
     _ctrl_sink: ControlSink | None
     _prev_t: float
     _imu_state: IMUState
+    _pc_time: bool
     _update_event: threading.Event
     _kill_switch: threading.Event
     _lock: threading.RLock
+    _u_lpf_t: float
+    _u: NDArray
 
     def __init__(
         self,
         target: Target,
         gimbal_state: SharedGimbalState,
         ctrl_sink: ControlSink | None = None,
+        _pc_time: bool = False,
     ):
         super().__init__()
         self.Kp = 1.0
-        self.Ki = 0.05
-        self.int_limit = 10.0
-        self.deadband = 0.1
+        self.Ki = 0.3
+        self.int_limit = 200.0
+        self._u_lpf_t = 0.0
+        self._u = np.zeros(2)
+        self.deadband = 0.0
         self.integral_error = np.zeros(2)
         self._target = target
         self._gimbal_state = gimbal_state
@@ -420,29 +427,43 @@ class GimbPIController(threading.Thread):
             self._imu_state = imu_state
             self._update_event.set()
 
+    def pc_time(self, value: bool) -> None:
+        with self._lock:
+            self._pc_time = value
+
     @staticmethod
     def angle_diff_deg(a: float | NDArray, b: float | NDArray) -> float | NDArray:
         d = (a - b + 180) % 360 - 180
         return d
 
+    def get_t(self) -> float:
+        with self._lock:
+            if self._pc_time:
+                return self._imu_state.t_pc
+            else:
+                return self._imu_state.t_imu
+
     def reset_integral(self) -> None:
         with self._lock:
             self.integral_error = np.zeros(2)
+            self._prev_t = self.get_t()
 
     def update_control(self) -> dict[str, NDArray | list[float]]:
         with self._lock:
             hp_imu = self._imu_state.hpr[0:2]
-            t_imu = self._imu_state.t_imu
-        hp_target = self._target.get_head_pitch(t_imu)
+            t = self.get_t()
+        hp_target = self._target.get_head_pitch(t)
         error = self.angle_diff_deg(np.array(hp_target), hp_imu)
         error[np.abs(error) < self.deadband] = 0.0
-        dt = t_imu - self._prev_t
+        dt = t - self._prev_t
         self.integral_error += error * dt
         self.integral_error = np.clip(
             self.integral_error, -self.int_limit, self.int_limit
         )
-        control_output = self.Kp * error + self.Ki * self.integral_error
-        self._prev_t = t_imu
+        u_ = self.Kp * error + self.Ki * self.integral_error
+        self._u = (1 - self._u_lpf_t) * u_ + self._u_lpf_t * self._u
+        control_output = self._u
+        self._prev_t = t
         return {
             "ctrl": control_output,
             "sp": hp_target,
@@ -470,6 +491,7 @@ class GimbPIController(threading.Thread):
                         )
                     )
 
+
     def stop(self):
         """Stop the controller thread."""
         self._update_event.set()
@@ -482,6 +504,18 @@ class GimbalController:
     _gimbal_send_thread: GimbalSend
     _gimbal_pi_thread: GimbPIController
     _ctx: zmq.Context
+
+    @property
+    def recv_thread(self) -> GimbalRecv:
+        return self._gimbal_recv_thread
+
+    @property
+    def send_thread(self) -> GimbalSend:
+        return self._gimbal_send_thread
+
+    @property
+    def pi_thread(self) -> GimbPIController:
+        return self._gimbal_pi_thread
 
     def set_imu_state(self, imu_state: IMUState) -> None:
         self._gimbal_pi_thread.new_data(imu_state)

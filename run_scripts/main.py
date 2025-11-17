@@ -30,13 +30,13 @@ def main():
     # pt_Bledisloe = at.Point.from_geodet([-27.511726, 153.0249, 10])
 
     ids_stream = CameraStream("ids-cam", IDSU33080() , "~/test_cam_data", 50)
-    asi_stream = CameraStream("asi-cam", ASI585(), "~/asi_cam_data", 25)
+    asi_stream = CameraStream("asi-cam", ASI585(), "~/asi_cam_data", 1260)
 
     # Instantiate state and monitors
     state = State()
     # state_plotter = StatePlotter(state=state, interval=0.5)
     # target = SkyTarget("Canopus", pt_Bledisloe, ids_stream.cam_mdl)
-    target = PathTarget(pt_GS2, path_nom, ids_stream.cam_mdl)
+    target = PathTarget(pt_GS2, path_nom, asi_stream.cam_mdl)
     gimbal_controller = GimbalController(target, sink=state.set_gimbal_state)
     gimbal_controller.pi_thread.pc_time(True)
     imu_monitor = CertusMonitor(

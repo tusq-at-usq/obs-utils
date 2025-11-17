@@ -467,12 +467,20 @@ class CameraStream:
         """Start the camera capture and save threads."""
 
         self._capture_killswitch.clear()
-        self._cam = self.cam.__enter__()
-
-        # Start capture thread
-        self._capture_thread = threading.Thread(target=self._capture_loop)
-        self._capture_thread.daemon = True
-        self._capture_thread.start()
+        try:
+            self._cam = self.cam.__enter__()
+            # Start capture thread
+            self._capture_thread = threading.Thread(target=self._capture_loop)
+            # self._capture_thread.daemon = True
+            self._capture_thread.start()
+        except:
+            try:
+                self._cam.__exit__()
+                self._capture_killswitch.set()
+                self._capture_thread.join()
+            except:
+                pass
+            raise RuntimeError(f"Could not find {self.name}")
         return self
 
     # def stop(self):

@@ -137,8 +137,8 @@ class IDSU33080(CameraInterface):
 
     def _get_frame(self) -> Frame:
 
-        trigger_time = time.time()
         self._rdn.FindNode("TriggerSoftware").Execute()
+        trigger_time = time.time()
 
         buffer = self._datastream.WaitForFinishedBuffer(1000)
         raw_image = ids_ipl_extension.BufferToImage(buffer)

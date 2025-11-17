@@ -132,7 +132,7 @@ class Display:
         self.p1.addItem(self.x_rules)
         self.p1.addItem(self.y_rules)
 
-        self.offset = 150
+        self.offset = 100
         self.traj_bounds_upper = pg.PlotDataItem()
         self.traj_bounds_lower = pg.PlotDataItem()
         self.traj_time_indicator = pg.PlotDataItem()
@@ -192,7 +192,7 @@ class Display:
         # Lock aspect ratio (optional)
         self.p1.setAspectLocked(True)
 
-    def downscale(self, img):
+    def downscale_img(self, img):
         if self._scale_factor != 1.0:
             new_size = (
                 int(img.shape[0] * self._scale_factor),
@@ -220,8 +220,8 @@ class Display:
         #     int(self._width * 0.8 * (1 / img_ratio) - 100),
         # )
         win_dims = (
-            int(self._width * 0.8),
-            int(self._width * 0.8 * (1 / img_ratio)),
+            int(self._width * 1),
+            int(self._width * 1 * (1 / img_ratio)),
         )
         self.win.resize(*win_dims)
 
@@ -360,6 +360,8 @@ class Display:
 
     def update_tracking(self, target: Target, timestamp: float, hpr_euler: NDArray):
         uv_path, uv_pt = target.project_from_ned_angles(hpr_euler, timestamp)
+        uv_path *= self._scale_factor
+        uv_pt *= self._scale_factor
         grad = np.gradient(uv_path[:, 1], uv_path[:, 0])
         theta = np.arctan(grad)
         upper_bound = np.array(
@@ -466,7 +468,7 @@ class Display:
                             pass
                     if self._ctx.has_imu_monitor:
                         try:
-                            # euler = self._state.extrap_imu_state(frame.timestamp).hpr
+                            # euler = self._state.extrap_imu_state(frame.timestamp, pc_time=True).hpr
                             euler = self._state.imu_state.hpr
                             lab_data["IMU"] = (
                                 f"Head {euler[0]:.2f} Pitch {euler[1]:.2f}"
@@ -487,7 +489,7 @@ class Display:
                         except:
                             pass
 
-                    img = self.downscale(frame.pixels)
+                    img = self.downscale_img(frame.pixels)
                     self.update_img(img)
                     self.update_labels(lab_data)
                     self.app.processEvents()

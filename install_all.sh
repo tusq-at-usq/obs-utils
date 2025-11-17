@@ -18,7 +18,7 @@ echo "Installing Encoders..."
 echo "Installing Cameras..."
 "$SCRIPT_DIR"/install_scripts/install_cameras.sh
 
-
+source ~/.env/obs/bin/activate
 uv pip install $SCRIPT_DIR
 
 reboot_on_confirm() {

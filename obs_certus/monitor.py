@@ -200,6 +200,8 @@ class CertusMonitor(threading.Thread):
                         t_pc=data["PC_Time"],
                     )
 
+                    t_now = float(data["PC_Time"])
+
                     if self._sinks:
                         for sink in self._sinks:
                             sink(state)
