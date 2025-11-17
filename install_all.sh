@@ -19,7 +19,7 @@ echo "Installing Cameras..."
 "$SCRIPT_DIR"/install_scripts/install_cameras.sh
 
 source ~/.env/obs/bin/activate
-uv pip install $SCRIPT_DIR
+uv pip install -e $SCRIPT_DIR
 
 reboot_on_confirm() {
   read -p "Setup complete. Reboot required for permission to take effect. Reboot now? (y/n): " choice
