@@ -307,7 +307,6 @@ class GimbalSend(threading.Thread):
             self._state.update_single_field("mode", mode)
             self._new_msg_event.set()
 
-
     def send_speed(self, az_speed: float, el_speed: float, force=False) -> None:
         """
         Thread-safe method to send speed command in manual mode.
@@ -324,8 +323,8 @@ class GimbalSend(threading.Thread):
             self._new_msg_event.set()
             self._state.update_from_send(
                 GimbalState(
-                    u_az = az_speed,
-                    u_el = el_speed,
+                    u_az=az_speed,
+                    u_el=el_speed,
                     mode=self.mode,
                     t_cmd_update=time.time(),
                 )
@@ -388,7 +387,9 @@ ControlSink = Callable[[float, float], None]
 class GimbPIController(threading.Thread):
     Kp: float
     Ki: float
-    integral_error: np.ndarray
+    Kff: float
+    integral_error: NDArray
+    feed_forward: NDArray
     _target: Target
     _gimbal_state: SharedGimbalState
     _ctrl_sink: ControlSink | None
@@ -410,12 +411,14 @@ class GimbPIController(threading.Thread):
     ):
         super().__init__()
         self.Kp = 1.0
-        self.Ki = 0.3
+        self.Ki = 0.0
+        self.Kff = 1
         self.int_limit = 200.0
         self._u_lpf_t = 0.0
         self._u = np.zeros(2)
         self.deadband = 0.0
         self.integral_error = np.zeros(2)
+        self.feed_forward = np.zeros(2)
         self._target = target
         self._gimbal_state = gimbal_state
         self._prev_t = time.time()
@@ -453,17 +456,19 @@ class GimbPIController(threading.Thread):
 
     def update_control(self) -> dict[str, NDArray | list[float]]:
         with self._lock:
-            hp_imu = self._imu_state.hpr[0:2]
+            hp_imu = np.array(self._imu_state.hpr[0:2])
             t = self.get_t()
-        hp_target = self._target.get_head_pitch(t)
-        error = self.angle_diff_deg(np.array(hp_target), hp_imu)
+        hp_target = np.array(self._target.get_head_pitch(t))
+        error = np.array(self.angle_diff_deg(np.array(hp_target), hp_imu))
         error[np.abs(error) < self.deadband] = 0.0
         dt = t - self._prev_t
         self.integral_error += error * dt
         self.integral_error = np.clip(
             self.integral_error, -self.int_limit, self.int_limit
         )
-        u_ = self.Kp * error + self.Ki * self.integral_error
+        self.feed_forward = np.array(self._target.get_head_pitch_rate(t))
+
+        u_ = self.Kp * error + self.Ki * self.integral_error + self.Kff *  self.feed_forward
         self._u = (1 - self._u_lpf_t) * u_ + self._u_lpf_t * self._u
         control_output = self._u
         self._prev_t = t
@@ -493,7 +498,6 @@ class GimbPIController(threading.Thread):
                             t_ctrl_update=time.time(),
                         )
                     )
-
 
     def stop(self):
         """Stop the controller thread."""
@@ -566,4 +570,3 @@ class GimbalController:
         self._gimbal_send_thread.join()
         self._gimbal_pi_thread.join()
         self._ctx.term()
-        

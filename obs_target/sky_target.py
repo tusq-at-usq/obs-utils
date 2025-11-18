@@ -105,6 +105,9 @@ class SkyTarget(Target):
         pitch = el
         return np.array([heading, pitch])
 
+    def get_head_pitch_rate(self, t_unix: float) -> NDArray:
+        return np.array([0.0, 0.0])
+
     def project_from_ned_angles(
         self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
     ) -> tuple[NDArray, NDArray]:
