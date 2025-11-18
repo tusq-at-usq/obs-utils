@@ -53,7 +53,7 @@ class PathTarget(Target):
         self._point = point
         self._target_path = target
         self._target_pt = target.points
-        self._ray_ecef = at.Ray.from_points(self._target_pt, self._point)
+        self._ray_ecef = at.Ray.from_points(self._target_pt, self._point).correct_refraction()
         self._frame_ned = at.spatial.frame.ned_frame(self._point)
         self._ray_ned = self._ray_ecef.to_frame(self._frame_ned)
 

@@ -133,8 +133,12 @@ class Display:
 
         self.x_rules = pg.PlotDataItem()
         self.y_rules = pg.PlotDataItem()
+        self.x_target = pg.PlotDataItem()
+        self.y_target = pg.PlotDataItem()
         self.p1.addItem(self.x_rules)
         self.p1.addItem(self.y_rules)
+        self.p1.addItem(self.x_target)
+        self.p1.addItem(self.y_target)
 
         self.offset = 100
         self.traj_bounds_upper = pg.PlotDataItem()
@@ -199,8 +203,8 @@ class Display:
     def downscale_img(self, img):
         if self._scale_factor != 1.0:
             new_size = (
-                int(img.shape[0] * self._scale_factor),
                 int(img.shape[1] * self._scale_factor),
+                int(img.shape[0] * self._scale_factor),
             )
             img_resized = cv2.resize(img, new_size, interpolation=cv2.INTER_AREA)
             return img_resized
@@ -357,7 +361,8 @@ class Display:
             except:
                 warnings.warn("Can't apply colourmap")
                 self.set_colourmap(False)
-        self.img.setImage(img, axis=0, levels=[0, 255])
+        self.img.setImage(img, axis=0)
+        # self.img.setImage(img, axis=0, levels=[0, 255])
 
     def update_labels(self, lab_data: dict):
         for key, item in lab_data.items():
@@ -367,45 +372,75 @@ class Display:
         uv_path, uv_pt = target.project_from_ned_angles(hpr_euler, timestamp, self._cam_mdl)
         uv_path *= self._scale_factor
         uv_pt *= self._scale_factor
-        grad = np.gradient(uv_path[:, 1], uv_path[:, 0])
-        theta = np.arctan(grad)
-        upper_bound = np.array(
-            [
-                uv_path[:, 0] + np.sin(theta) * self.offset,
-                uv_path[:, 1] - np.cos(theta) * self.offset,
-            ]
-        )
-        lower_bound = np.array(
-            [
-                uv_path[:, 0] - np.sin(theta) * self.offset,
-                uv_path[:, 1] + np.cos(theta) * self.offset,
-            ]
-        )
-        self.traj_bounds_upper.setData(
-            y=self._display_res[1] - upper_bound[1],
-            x=1 * upper_bound[0],
-            pen="b",
-        )
-        self.traj_bounds_lower.setData(
-            y=self._display_res[1] - lower_bound[1],
-            x=1 * lower_bound[0],
-            pen="b",
-        )
-        self.traj_time_indicator.setData(
+
+
+        self.target_crosshairs(uv_pt)
+
+
+    #     grad = np.gradient(uv_path[:, 1], uv_path[:, 0])
+    #     theta = np.arctan(grad)
+    #     upper_bound = np.array(
+    #         [
+    #             uv_path[:, 0] + np.sin(theta) * self.offset,
+    #             uv_path[:, 1] - np.cos(theta) * self.offset,
+    #         ]
+    #     )
+    #     lower_bound = np.array(
+    #         [
+    #             uv_path[:, 0] - np.sin(theta) * self.offset,
+    #             uv_path[:, 1] + np.cos(theta) * self.offset,
+    #         ]
+    #     )
+    #     self.traj_bounds_upper.setData(
+    #         y=self._display_res[1] - upper_bound[1],
+    #         x=1 * upper_bound[0],
+    #         pen="b",
+    #     )
+    #     self.traj_bounds_lower.setData(
+    #         y=self._display_res[1] - lower_bound[1],
+    #         x=1 * lower_bound[0],
+    #         pen="b",
+    #     )
+    #     self.traj_time_indicator.setData(
+    #         y=[
+    #             self._display_res[1] - uv_pt[0, 1] + self.offset,
+    #             self._display_res[1] - uv_pt[0, 1] + 2 * self.offset,
+    #             self._display_res[1] - uv_pt[0, 1] - self.offset,
+    #             self._display_res[1] - uv_pt[0, 1] - 2 * self.offset,
+    #         ],
+    #         x=[
+    #             uv_pt[0, 0] - self.offset,
+    #             uv_pt[0, 0] - 2 * self.offset,
+    #             uv_pt[0, 0] + self.offset,
+    #             uv_pt[0, 0] + 2 * self.offset,
+    #         ],
+    #         connect="pairs",
+    #         pen="r",
+    #     )
+
+    def target_crosshairs(self, uv_pt: NDArray):
+        target_offset = 50
+        self.x_target.setData(
             y=[
-                self._display_res[1] - uv_pt[0, 1] + self.offset,
-                self._display_res[1] - uv_pt[0, 1] + 2 * self.offset,
-                self._display_res[1] - uv_pt[0, 1] - self.offset,
-                self._display_res[1] - uv_pt[0, 1] - 2 * self.offset,
+                self._display_res[1] - uv_pt[0, 1] - target_offset,
+                self._display_res[1] - uv_pt[0, 1] + target_offset,
             ],
             x=[
-                uv_pt[0, 0] - self.offset,
-                uv_pt[0, 0] - 2 * self.offset,
-                uv_pt[0, 0] + self.offset,
-                uv_pt[0, 0] + 2 * self.offset,
+                uv_pt[0, 0],
+                uv_pt[0, 0],
             ],
-            connect="pairs",
-            pen="r",
+            pen="y",
+        )
+        self.y_target.setData(
+            y=[
+                self._display_res[1] - uv_pt[0, 1],
+                self._display_res[1] - uv_pt[0, 1],
+            ],
+            x=[
+                uv_pt[0, 0] - target_offset,
+                uv_pt[0, 0] + target_offset,
+            ],
+            pen="y",
         )
 
     def crosshairs(self):

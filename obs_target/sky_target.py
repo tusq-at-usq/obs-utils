@@ -11,6 +11,8 @@ from obs_target.target import Target
 import astrix as at
 from astrix.spatial import Rotation
 
+""" Note: Planets are currently not supported in this implementation. """
+
 BRIGHT_STARS = {
     "Sirius": ("06h45m08.917s", "-16d42m58.02s"),
     "Canopus": ("06h23m57.109s", "-52d41m44.38s"),
@@ -28,19 +30,19 @@ BRIGHT_STARS = {
     "Spica": ("13h25m11.579s", "-11d09m40.75s"),
     "Fomalhaut": ("22h57m39.046s", "-29d37m20.05s"),
 }
-PLANETS = [
-    "earth",
-    "sun",
-    "moon",
-    "mercury",
-    "venus",
-    "earth-moon-barycenter",
-    "mars",
-    "jupiter",
-    "saturn",
-    "uranus",
-    "neptune",
-]
+# PLANETS = [
+#     "earth",
+#     "sun",
+#     "moon",
+#     "mercury",
+#     "venus",
+#     "earth-moon-barycenter",
+#     "mars",
+#     "jupiter",
+#     "saturn",
+#     "uranus",
+#     "neptune",
+# ]
 
 
 class SkyTarget(Target):
@@ -92,8 +94,8 @@ class SkyTarget(Target):
 
         if name in BRIGHT_STARS:
             return self.get_star(name, t_unix)
-        elif name in PLANETS:
-            return self.get_planet(name, t_unix)
+        # elif name in PLANETS:
+        #     return self.get_planet(name, t_unix)
         else:
             raise ValueError(f"Unknown sky target name: {name}")
 

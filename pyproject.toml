@@ -24,6 +24,7 @@ dependencies = [
     "prompt-toolkit>=3.0.52",
     "zwoasi",
     "ids-peak>=1.11.1.0.5",
+    "jplephem>=2.23",
 ]
 
 [tool.setuptools]

@@ -162,17 +162,17 @@ class ASI585(CameraInterface):
         Args:
             bw: Bandwidth limit in Mbps
         """
-        if isinstance(bw, float):
+        if isinstance(bw, float | int):
             if not self._limits["bandwidth"][0] <= bw <= self._limits["bandwidth"][1]:
                 print("Clipping bandwidth to valid range.")
             bw = max(self._limits["bandwidth"][0], min(
                 self._limits["bandwidth"][1], bw))
             self._asicam.set_control_value(asi.ASI_BANDWIDTHOVERLOAD, int(bw))
 
-        if bw == "auto":
+        elif bw == "auto":
             self._asicam.set_control_value(asi.ASI_BANDWIDTHOVERLOAD, 80, auto=True)
 
-        if bw == "min":
+        elif bw == "min":
             self._asicam.set_control_value(
                 asi.ASI_BANDWIDTHOVERLOAD,
                 int(self._limits["bandwidth"][0])
