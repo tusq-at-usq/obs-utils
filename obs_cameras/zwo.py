@@ -122,17 +122,14 @@ class ASI585(CameraInterface):
         Returns:
             float: Current exposure time in microseconds
         """
-        return self._asicam.get_control_value(asi.ASI_EXPOSURE)[0]
+        return self._asicam.get_control_value(asi.ASI_EXPOSURE)[0] / 1e3
 
     def _set_exposure(self, exp: float) -> None:
         """
         Args:
-            exp: Exposure time in microseconds
+            exp: Exposure time in milliseconds
         """
-        # if 0 < exp - self.exposure < self._limits["exposure_incr"]:
-        #     exp = self.exposure + self._limits["exposure_incr"]
-        # elif 0 > exp - self.exposure > -self._limits["exposure_incr"]:
-        #     exp = self.exposure - self._limits["exposure_incr"]
+        exp = int(exp * 1e3)
 
         if not self._limits["exposure"][0] <= exp <= self._limits["exposure"][1]:
             print("Clipping exposure to valid range.")

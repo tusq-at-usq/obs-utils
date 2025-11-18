@@ -85,6 +85,7 @@ class IDSU33080(CameraInterface):
         self._rdn.FindNode("AcquisitionStart").WaitUntilDone()
 
     def _set_exposure(self, exp: float) -> None:
+        exp = int(exp * 1e3)
         if not self._limits["exposure"][0] <= exp <= self._limits["exposure"][1]:
             print("Clipping exposure to valid range.")
         exp = max(self._limits["exposure"][0], min(self._limits["exposure"][1], exp))
@@ -106,7 +107,7 @@ class IDSU33080(CameraInterface):
             warnings.warn("Gain value not recognised; no changes made.")
 
     def _get_exposure(self) -> float:
-        return self._rdn.FindNode("ExposureTime").Value()
+        return self._rdn.FindNode("ExposureTime").Value() / 1e3
 
     def _get_gain(self) -> float:
         self._rdn.FindNode("GainSelector").SetCurrentEntry("AnalogAll")

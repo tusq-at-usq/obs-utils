@@ -170,13 +170,14 @@ class Alvium811(CameraInterface):
         Returns:
             float: Current exposure time in microseconds
         """
-        return self._vmbcam.ExposureTime.get()
+        return self._vmbcam.ExposureTime.get() / 1e3
 
     def _set_exposure(self, exp: float) -> None:
         """
         Args:
-            exp: Exposure time in microseconds
+            exp: Exposure time in milliseconds
         """
+        exp = int(exp*1e3)  # Convert to microseconds for camera API
         if 0 < exp - self.exposure < self._limits["exposure_incr"]:
             exp = self.exposure + self._limits["exposure_incr"]
         elif 0 > exp - self.exposure > -self._limits["exposure_incr"]:

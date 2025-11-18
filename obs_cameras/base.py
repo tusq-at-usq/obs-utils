@@ -123,7 +123,7 @@ class CameraInterface(ABC):
         Must be implemented by derived classes.
 
         Returns:
-            float: Current exposure time in microseconds
+            float: Current exposure time in milliseconds
         """
         pass
 
@@ -134,7 +134,7 @@ class CameraInterface(ABC):
         Must be implemented by derived classes.
 
         Args:
-            exp: Exposure time in microseconds
+            exp: Exposure time in milliseconds
         """
         pass
 
@@ -239,7 +239,7 @@ class CameraInterface(ABC):
         Thread-safe method to set the camera exposure time.
 
         Args:
-            exp: Exposure time in microseconds
+            exp: Exposure time in milliseconds
         """
         with self._settings_lock:
             self._exposure_set = exp
@@ -273,7 +273,7 @@ class CameraInterface(ABC):
         Thread-safe getter for current exposure value.
 
         Returns:
-            float: Current exposure value in microseconds
+            float: Current exposure value in milliseconds
         """
         with self._settings_lock:
             return self._exposure_set
@@ -284,7 +284,7 @@ class CameraInterface(ABC):
         Thread-safe getter for current exposure value.
 
         Returns:
-            float: Current exposure value in microseconds
+            float: Current exposure value in milliseconds
         """
         with self._settings_lock:
             return self._get_exposure()
