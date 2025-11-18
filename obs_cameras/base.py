@@ -366,7 +366,7 @@ class CameraInterface(ABC):
 class CameraStream:
     name: str
     _cam: CameraInterface
-    _cam_mdl: FixedZoomCamera | None
+    _cam_mdl: FixedZoomCamera
     _save_root_dir: pathlib.Path
     _save_dir: pathlib.Path
     _capture_killswitch: threading.Event = threading.Event()
@@ -408,14 +408,13 @@ class CameraStream:
 
         self.name = name
         self._cam = cam_ifc
-        if foc_len_mm is not None:
-            self.cam_mdl = FixedZoomCamera(
-                res=self._cam.frame_res,
-                sensor_size=self._cam.sensor_size,
-                focal_length=foc_len_mm,
-            )
-        else:
-            self.cam_mdl = None
+        if foc_len_mm is None:
+            foc_len_mm = 35.0  # Default focal length if none provided
+        self._cam_mdl = FixedZoomCamera(
+            res=self._cam.frame_res,
+            sensor_size=self._cam.sensor_size,
+            focal_length=foc_len_mm,
+        )
 
         self.save_root_dir = pathlib.Path(save_root_dir).expanduser()
         self.save_dir = os.path.join(
@@ -442,6 +441,11 @@ class CameraStream:
     def cam(self) -> CameraInterface:
         """Get the camera interface."""
         return self._cam
+
+    @property
+    def cam_mdl(self) -> FixedZoomCamera:
+        """Get the camera model."""
+        return self._cam_mdl
 
     @property
     def save_queue_length(self) -> int:

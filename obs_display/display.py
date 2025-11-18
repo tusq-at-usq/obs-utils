@@ -10,6 +10,8 @@ import datetime
 from numpy.typing import NDArray
 import time
 
+import astrix as at
+
 from obs_cameras.base import CameraStream
 from obs_target.target import Target
 from obs_utils.context import Context, State
@@ -45,6 +47,7 @@ class Display:
 
     _ctx: Context
     _stream: CameraStream
+    _cam_mdl: at.FixedZoomCamera
     _state: State
     _target: Target | None
 
@@ -65,6 +68,7 @@ class Display:
         self._ctx = context
         self._stream = self._ctx.disp_stream
         self._state = state
+        self._cam_mdl = self._stream.cam_mdl
         self._target = target
 
         self._width = 1920
@@ -209,6 +213,7 @@ class Display:
     def change_stream(self):
         with self._disp_lock:
             self._stream = self._ctx.disp_stream
+            self._cam_mdl = self._stream.cam_mdl
             self.set_bounds()
             self._init_stream()
         self._new_stream_event.clear()

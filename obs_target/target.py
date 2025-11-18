@@ -20,13 +20,13 @@ from abc import ABC, abstractmethod
 class Target(ABC):
     @abstractmethod
     def project_from_ecef_angles(
-        self, euler: ArrayLike, t_unix: float
+        self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
     ) -> tuple[NDArray, NDArray]:
         pass
 
     @abstractmethod
     def project_from_ned_angles(
-        self, euler: ArrayLike, t_unix: float
+        self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
     ) -> tuple[NDArray, NDArray]:
         pass
 
@@ -46,22 +46,20 @@ class PathTarget(Target):
     _ray_ecef: at.Ray
     _ray_ned: at.Ray
     _frame_ned: at.Frame
-    _cam: at.FixedZoomCamera | None
 
     def __init__(
-        self, point: at.Point, target: at.Path, cam: at.FixedZoomCamera
+        self, point: at.Point, target: at.Path
     ) -> None:
         self._point = point
         self._target_path = target
         self._target_pt = target.points
-        self._cam = cam
         self._ray_ecef = at.Ray.from_points(self._target_pt, self._point)
         self._frame_ned = at.spatial.frame.ned_frame(self._point)
         self._ray_ned = self._ray_ecef.to_frame(self._frame_ned)
 
-    @partial(jax.jit, static_argnames=("self",))
+    @partial(jax.jit, static_argnames=("self", "cam"))
     def _project_from_ecef_angles(
-        self, euler: ArrayLike, t_unix: float
+        self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
     ) -> tuple[ArrayLike, ArrayLike]:
         """Project target points to image plane from ECEF angles.
 
@@ -74,23 +72,21 @@ class PathTarget(Target):
         rot = Rotation.from_euler("ZYX", jnp.array(euler).reshape(1, -1), degrees=True)
         frame = at.Frame(rot, loc=self._point, backend=jnp)
         ray = self._ray_ecef.convert_to(jnp).to_frame(frame)
-        uv_path = ray.project_to_cam(self._cam.convert_to(jnp))
+        uv_path = ray.project_to_cam(cam.convert_to(jnp))
         uv_point = ray.interp(
             at.Time(t_unix, backend=jnp), check_bounds=False
-        ).project_to_cam(self._cam.convert_to(jnp))
+        ).project_to_cam(cam.convert_to(jnp))
         return uv_path.uv, uv_point.uv
 
     def project_from_ecef_angles(
-        self, euler: ArrayLike, t_unix: float
+        self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
     ) -> tuple[NDArray, NDArray]:
-        if self._cam is None:
-            raise RuntimeError("Camera is not defined for this target.")
-        uv_path, uv_point = self._project_from_ecef_angles(euler, t_unix)
+        uv_path, uv_point = self._project_from_ecef_angles(euler, t_unix, cam)
         return np.array(uv_path), np.array(uv_point)
 
-    @partial(jax.jit, static_argnames=("self",))
+    @partial(jax.jit, static_argnames=("self","cam"))
     def _project_from_ned_angles(
-        self, euler: ArrayLike, t_unix: float
+        self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
     ) -> tuple[ArrayLike, ArrayLike]:
         """Project target points to image plane from NED angles.
 
@@ -103,18 +99,16 @@ class PathTarget(Target):
         rot = Rotation.from_euler("ZYX", jnp.array(euler).reshape(1, -1), degrees=True)
         frame = at.Frame(rot, ref_frame=self._frame_ned, backend=jnp)
         ray = self._ray_ecef.convert_to(jnp).to_frame(frame)
-        uv_path = ray.project_to_cam(self._cam.convert_to(jnp))
+        uv_path = ray.project_to_cam(cam.convert_to(jnp))
         uv_point = ray.interp(
             at.Time(t_unix, backend=jnp), check_bounds=False
-        ).project_to_cam(self._cam.convert_to(jnp))
+        ).project_to_cam(cam.convert_to(jnp))
         return uv_path.uv, uv_point.uv
 
     def project_from_ned_angles(
-        self, euler: ArrayLike, t_unix: float
+        self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
     ) -> tuple[NDArray, NDArray]:
-        if self._cam is None:
-            raise RuntimeError("Camera is not defined for this target.")
-        uv_path, uv_pt =  self._project_from_ned_angles(euler, t_unix)
+        uv_path, uv_pt =  self._project_from_ned_angles(euler, t_unix, cam)
         return np.array(uv_path), np.array(uv_pt)
 
     def check_time_bounds(self, t_unix: float) -> tuple[bool, bool]:

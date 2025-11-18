@@ -46,12 +46,10 @@ PLANETS = [
 class SkyTarget(Target):
     _name: str
     _point: at.Point
-    _cam: at.FixedZoomCamera | None
 
-    def __init__(self, name: str, point: at.Point, cam: at.FixedZoomCamera) -> None:
+    def __init__(self, name: str, point: at.Point) -> None:
         self._name = name
         self._point = point
-        self._cam = cam
         self._frame_ned = at.spatial.frame.ned_frame(self._point)
 
     def check_time_bounds(self, t_unix: float) -> tuple[bool, bool]:
@@ -106,10 +104,8 @@ class SkyTarget(Target):
         return np.array([heading, pitch])
 
     def project_from_ned_angles(
-        self, euler: ArrayLike, t_unix: float
-    ) -> tuple[ArrayLike, ArrayLike]:
-        if self._cam is None:
-            raise RuntimeError("Camera is not defined for this target.")
+        self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
+    ) -> tuple[NDArray, NDArray]:
         hp = self.get_head_pitch(t_unix)
         rot = Rotation.from_euler("ZYX", np.array(euler).reshape(1, -1), degrees=True)
         frame = at.Frame(rot, ref_frame=self._frame_ned)
@@ -118,14 +114,12 @@ class SkyTarget(Target):
             frame=frame,
             time=at.Time(t_unix),
         )
-        uv = ray.project_to_cam(self._cam)
+        uv = ray.project_to_cam(cam)
         return uv.uv, uv.uv
 
     def project_from_ecef_angles(
-        self, euler: ArrayLike, t_unix: float
-    ) -> tuple[ArrayLike, ArrayLike]:
-        if self._cam is None:
-            raise RuntimeError("Camera is not defined for this target.")
+        self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
+    ) -> tuple[NDArray, NDArray]:
         hp = self.get_head_pitch(t_unix)
         rot = Rotation.from_euler("ZYX", np.array(euler).reshape(1, -1), degrees=True)
         frame = at.Frame(rot)
@@ -134,5 +128,5 @@ class SkyTarget(Target):
             frame=frame,
             time=at.Time(t_unix),
         )
-        uv = ray.project_to_cam(self._cam)
+        uv = ray.project_to_cam(cam)
         return uv.uv, uv.uv
