@@ -7,7 +7,7 @@ import threading
 from typing import Callable
 import jax
 from jax import numpy as jnp
-from typing import TypeAlias
+from typing import TypeAlias, Iterable
 from types import ModuleType
 
 ArrayNS: TypeAlias = ModuleType
@@ -79,29 +79,37 @@ class EncoderMonitor(threading.Thread):
     """Get encoder values from the ZMQ stream"""
 
     config: dict
-    context: zmq.Context
-    socket: zmq.Socket
-    sink: EncoderSink | None
+    _context: zmq.Context
+    _socket: zmq.Socket
+    _sinks: list[EncoderSink] | None
     _kill_event: threading.Event
 
     def __init__(
-        self, config_filepath=DEFAULT_CONFIG_PATH, sink: EncoderSink | None = None
+        self,
+        config_filepath=DEFAULT_CONFIG_PATH,
+        sink: EncoderSink | Iterable[EncoderSink] | None = None,
     ):
         with open(config_filepath, "r") as f:
             self.config = yaml.safe_load(f)
-        self.sink = sink
+
+        if callable(sink):
+            self._sinks = [sink]
+        elif isinstance(sink, Iterable):
+            self._sinks = list(sink)
+        else:
+            self._sinks = None
         self._kill_event = threading.Event()
 
     def __enter__(self):
-        self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.SUB)
-        self.socket.setsockopt(zmq.CONFLATE, 1)
-        self.socket.setsockopt(zmq.SUBSCRIBE, b"")
-        self.socket.setsockopt(zmq.RCVTIMEO, 200)  # 100 ms timeout
+        self._context = zmq.Context()
+        self._socket = self._context.socket(zmq.SUB)
+        self._socket.setsockopt(zmq.CONFLATE, 1)
+        self._socket.setsockopt(zmq.SUBSCRIBE, b"")
+        self._socket.setsockopt(zmq.RCVTIMEO, 200)  # 100 ms timeout
         if self.config["protocol"] == "IPC":
-            self.socket.connect(f"ipc://{self.config['address']}")
+            self._socket.connect(f"ipc://{self.config['address']}")
         elif self.config["protocol"] == "TCP":
-            self.socket.connect(f"tcp://*:{self.config['address']}")
+            self._socket.connect(f"tcp://*:{self.config['address']}")
         else:
             raise ValueError("Unsupported protocol in config file")
         self.start()
@@ -116,7 +124,7 @@ class EncoderMonitor(threading.Thread):
         try:
             while not self._kill_event.is_set():
                 try:
-                    message = self.socket.recv()
+                    message = self._socket.recv()
                     data = yaml.safe_load(message)
 
                     state = EncoderState(
@@ -127,8 +135,9 @@ class EncoderMonitor(threading.Thread):
                         t=float(data["Sec"]),
                     )
 
-                    if self.sink is not None:
-                        self.sink(state)
+                    if self._sinks:
+                        for sink in self._sinks:
+                            sink(state)
 
                 except zmq.Again:
                     pass
@@ -136,5 +145,5 @@ class EncoderMonitor(threading.Thread):
                 except Exception as e:
                     print(f"Error receiving encoder data: {e}")
         finally:
-            self.socket.close()
-            self.context.term()
+            self._socket.close()
+            self._context.term()

@@ -125,15 +125,10 @@ class CertusMonitor(threading.Thread):
         super().__init__()
         with open(config_filepath, "r") as f:
             self._config = yaml.safe_load(f)
-        self._euler_offset = self._config.get("euler_offset", None)
-        if self._euler_offset is not None:
-            self.rot_fixed = Rotation.from_euler(
-                "ZYX", jnp.array(self._euler_offset), degrees=True
-            )
-        else:
-            self.rot_fixed = Rotation.from_euler(
-                "ZYX", jnp.array([0.0, 0.0, 0.0]), degrees=True
-            )
+        self._euler_offset = self._config.get("euler_offset", [0,0,0])
+        self.rot_fixed = Rotation.from_euler(
+            "ZYX", jnp.array(self._euler_offset), degrees=True
+        )
         self._kill_event = threading.Event()
         if callable(sink):
             self._sinks = [sink]
