@@ -7,7 +7,9 @@ CAM_ASSETS_DIR="$SCRIPT_DIR/../obs_cameras/assets"
 curl -L "https://downloads.alliedvision.com/VimbaX/VimbaX_Setup-2025-3-Linux64.tar.gz" -o "$HOME/Downloads/VimbaX_Setup-2025-3-Linux64.tar.gz"
 mkdir -p "$CAM_ASSETS_DIR"/VimbaX
 tar -xf ~/Downloads/VimbaX_Setup-2025-3-Linux64.tar.gz -C "$CAM_ASSETS_DIR"/VimbaX --strip-components=1
-sudo "$CAM_ASSETS_DIR"/VimbaX/cti/Install_GenTL_Path.sh
+cd "$CAM_ASSETS_DIR"/VimbaX/cti
+sudo ./Install_GenTL_Path.sh
+cd "$CWD"
 
 # ZWO install
 sudo apt update
