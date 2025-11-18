@@ -16,6 +16,8 @@ from numpy.typing import ArrayLike, NDArray
 from functools import partial
 from abc import ABC, abstractmethod
 
+from astrix.utils import path_to_az_el_rate
+
 
 class Target(ABC):
     @abstractmethod
@@ -38,18 +40,20 @@ class Target(ABC):
     def get_head_pitch(self, t_unix: float) -> ArrayLike:
         pass
 
+    @abstractmethod
+    def get_head_pitch_rate(self, t_unix: float) -> ArrayLike:
+        pass
+
 
 class PathTarget(Target):
     _point: at.Point
     _target_pt: at.Point
-    _target_paths: at.Path
+    _target_path: at.Path
     _ray_ecef: at.Ray
     _ray_ned: at.Ray
     _frame_ned: at.Frame
 
-    def __init__(
-        self, point: at.Point, target: at.Path
-    ) -> None:
+    def __init__(self, point: at.Point, target: at.Path) -> None:
         self._point = point
         self._target_path = target
         self._target_pt = target.points
@@ -108,7 +112,7 @@ class PathTarget(Target):
     def project_from_ned_angles(
         self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
     ) -> tuple[NDArray, NDArray]:
-        uv_path, uv_pt =  self._project_from_ned_angles(euler, t_unix, cam)
+        uv_path, uv_pt = self._project_from_ned_angles(euler, t_unix, cam)
         return np.array(uv_path), np.array(uv_pt)
 
     def check_time_bounds(self, t_unix: float) -> tuple[bool, bool]:
@@ -143,3 +147,25 @@ class PathTarget(Target):
         elif not end_in_bounds:
             t_unix = self._target_path.end_time.unix[0]
         return np.array(self._get_head_pitch(t_unix))
+
+    @partial(jax.jit, static_argnames=("self",))
+    def _get_head_pitch_rate(self, t_unix: float) -> ArrayLike:
+        """Get the heading and pitch rate of the target path at the given unix time.
+
+        Args:
+            t_unix (float): Unix time to get the orientation rate.
+        Returns:
+            hpr_rate: ArrayLike of heading rate and pitch rate in degrees per second.
+        """
+        time = at.Time(t_unix, backend=jnp)
+        return path_to_az_el_rate(
+            self._target_path.convert_to(jnp), time, self._frame_ned.convert_to(jnp)
+        )
+
+    def get_head_pitch_rate(self, t_unix: float) -> NDArray:
+        start_in_bounds, end_in_bounds = self.check_time_bounds(t_unix)
+        if not start_in_bounds:
+            return np.array([0.0, 0.0])
+        elif not end_in_bounds:
+            return np.array([0.0, 0.0])
+        return np.array(self._get_head_pitch_rate(t_unix))[0]
