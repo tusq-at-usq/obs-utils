@@ -19,7 +19,7 @@ fi
 # Add LD_LIBRARY_PATH to .bashrc if not already present
 if ! grep -q 'LD_LIBRARY_PATH=/opt/ids-peak_2.18.1.0-132_amd64/lib' ~/.bashrc; then
     echo 'export LD_LIBRARY_PATH=/opt/ids-peak_2.18.1.0-132_amd64/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH' >> ~/.bashrc
-    echo 'export GENICAM_GENTL64_PATH=/opt/ids-peak_2.18.1.0-132_amd64/lib/x86_64-linux-gnu/ids-peak/cti' >> ~/.bashrc
+    echo 'export GENICAM_GENTL64_PATH=/opt/ids-peak_2.18.1.0-132_amd64/lib/x86_64-linux-gnu/ids-peak/cti:$GENICAM_GENTL64_PATH' >> ~/.bashrc
 fi
 
 

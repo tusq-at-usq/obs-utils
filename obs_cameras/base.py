@@ -477,14 +477,14 @@ class CameraStream:
             self._capture_thread = threading.Thread(target=self._capture_loop)
             # self._capture_thread.daemon = True
             self._capture_thread.start()
-        except:
+        except Exception as e:
             try:
                 self._cam.__exit__()
                 self._capture_killswitch.set()
                 self._capture_thread.join()
             except:
                 pass
-            raise RuntimeError(f"Could not find {self.name}")
+            raise RuntimeError(f"Error connecting to camera {self.name}: {e}") from e
         return self
 
     # def stop(self):

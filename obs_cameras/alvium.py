@@ -13,7 +13,7 @@ class Alvium811(CameraInterface):
     SENSOR_SIZE = (2848*2.74*1e-3, 2848*2.74*1e-3)
     DTYPE = "uint8"
     GAIN_DEFAULT = 1
-    EXP_DEFAULT = 20e3
+    EXP_DEFAULT = 20
 
     _vmb: vmbpy.VmbSystem
     _vmbcam: vmbpy.Camera

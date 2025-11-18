@@ -20,7 +20,7 @@ class ASI585(CameraInterface):
     USB_TRANSFER_TIME: float = 0.001  # Estimated USB transfer time in seconds (1ms)
     DTYPE = "uint8"
     GAIN_DEFAULT = 5
-    EXP_DEFAULT = 20e3
+    EXP_DEFAULT = 20
 
     _frame_delivered = threading.Event
     _asicam: asi.Camera

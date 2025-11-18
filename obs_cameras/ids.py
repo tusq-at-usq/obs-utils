@@ -16,7 +16,7 @@ class IDSU33080(CameraInterface):
     SENSOR_SIZE = (8.473, 7.086)  # in meters
     DTYPE = "uint12"
     GAIN_DEFAULT = 1
-    EXP_DEFAULT = 20e3
+    EXP_DEFAULT = 20
 
     _idscam: ids.Camera
     _frame_delivered = threading.Event
