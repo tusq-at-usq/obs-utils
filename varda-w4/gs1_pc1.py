@@ -1,4 +1,4 @@
-from obs_cameras.alvium import Alvium811
+from obs_cameras.alvium import Alvium811, Alvium508
 from obs_cameras.zwo import ASI585
 from obs_cameras.base import CameraStream
 from obs_display.display import Display
@@ -22,8 +22,8 @@ def main():
     )
     pt_GS1 = at.Point.from_geodet([-31.988851, 132.437920, 10])
 
-    alv_stream = CameraStream("ids-cam", Alvium811(), "~/test_cam_data", 50)
-    zwo_stream = CameraStream("asi-cam", ASI585(), "~/asi_cam_data", 1260)
+    alv_stream = CameraStream("alv-cam", Alvium811(), "~/test_cam_data", 50)
+    # zwo_stream = CameraStream("asi-cam", ASI585(), "~/asi_cam_data", 1260)
 
     # Instantiate state and monitors
     state = State()
@@ -31,7 +31,7 @@ def main():
     enc_monitor = EncoderMonitor(sink=[state.set_encoder_state])
     imu_monitor = CertusMonitor(sink=[state.set_imu_state])
     context = Context(
-        streams=[alv_stream, zwo_stream],
+        streams=[alv_stream],
         imu_monitor=imu_monitor,
         enc_monitor=enc_monitor,
     )
