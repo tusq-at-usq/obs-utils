@@ -11,3 +11,4 @@ cpp/certus/stream_packets
 build/**
 
 obs_astro/assets/**
+obs_cameras/assets/**
