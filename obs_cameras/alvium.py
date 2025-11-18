@@ -186,6 +186,7 @@ class Alvium811(CameraInterface):
         if not self._limits["exposure"][0] <= exp <= self._limits["exposure"][1]:
             print("Clipping exposure to valid range.")
         exp = max(self._limits["exposure"][0], min(self._limits["exposure"][1], exp))
+        print(exp)
         self._vmbcam.ExposureTime.set(exp)
 
     def _set_gain(self, gain: float | str) -> None:
@@ -202,6 +203,7 @@ class Alvium811(CameraInterface):
             if not self._limits["gain"][0] <= gain <= self._limits["gain"][1]:
                 print("Clipping gain to valid range.")
             gain = max(self._limits["gain"][0], min(self._limits["gain"][1], gain))
+            self._vmbcam.Gain.set(gain)
 
     def convert_for_monitoring(self, frame: Frame) -> Frame:
         # Convert to 8-bit grayscale for monitoring

@@ -165,7 +165,7 @@ class Display:
             self._stream.cam.set_gain(new_gain)
         elif txt == "E":
             old_exp = self._stream.cam.exposure
-            new_exp = old_exp * 1.1
+            new_exp = max(old_exp * 1.1, old_exp + 0.1)
             self._stream.cam.set_exposure(new_exp)
         elif txt == "e":
             old_exp = self._stream.cam.exposure
