@@ -226,6 +226,7 @@ class GimbalSend(threading.Thread):
         self._speed_set_socket = self._context.socket(zmq.REQ)
         self._speed_set_socket.setsockopt(zmq.RCVTIMEO, 200)  # 200ms timeout on reply
         self._speed_set_socket.connect("tcp://scoti.local:60004")
+        self.send_speed(0.0, 0.0, force=True)
 
     def set_limit(self, axis: str, end: str) -> None:
         """
@@ -300,14 +301,14 @@ class GimbalSend(threading.Thread):
         """
         if mode in ["manual", "tracking"]:
             if mode != "tracking":
-                self._msg_queue.put(f"S,A{0.0:.3f},E{0.0:.3f}")
+                self.send_speed(0.0, 0.0, force=True)
                 self._new_msg_event.set()
             self._mode = mode
             self._state.update_single_field("mode", mode)
             self._new_msg_event.set()
 
 
-    def send_speed(self, az_speed: float, el_speed: float) -> None:
+    def send_speed(self, az_speed: float, el_speed: float, force=False) -> None:
         """
         Thread-safe method to send speed command in manual mode.
 
@@ -316,7 +317,7 @@ class GimbalSend(threading.Thread):
             el_speed: Elevation speed in degrees per second
         """
         # Safety check that in manual mode
-        if self.mode == "manual":
+        if self.mode == "manual" and not force:
             warnings.warn("Cannot send speed command in non-manual mode")
         else:
             self._msg_queue.put(f"S,A{az_speed:.3f},E{el_speed:.3f}")
@@ -355,6 +356,7 @@ class GimbalSend(threading.Thread):
         return False
 
     def run(self):
+        self.send_speed(0.0, 0.0, force=True)
         try:
             while not self._kill_switch.is_set():
                 self._new_msg_event.wait(timeout=0.1)
@@ -419,6 +421,7 @@ class GimbPIController(threading.Thread):
         self._prev_t = time.time()
         self._ctrl_sink = ctrl_sink
         self._update_event = threading.Event()
+        self._pc_time = _pc_time
         self._kill_switch = threading.Event()
         self._lock = threading.RLock()
 
