@@ -89,6 +89,7 @@ class EncoderMonitor(threading.Thread):
         config_filepath=DEFAULT_CONFIG_PATH,
         sink: EncoderSink | Iterable[EncoderSink] | None = None,
     ):
+        super().__init__()
         with open(config_filepath, "r") as f:
             self.config = yaml.safe_load(f)
 
