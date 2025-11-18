@@ -4,5 +4,5 @@ log_max_rows: 100000 # Max rows to prevent log files that are too large
 protocol: "IPC" # IPC or "TCP" if acrss multiple computers
 address: "/tmp/encoders.sock" # or e.g. "*:5000" for TCP
 baudrate: 115200 # Certus defalt
-serials: ["A703YD9I",]
+serials: ["A703YD9I","A703YDI7"]
 
