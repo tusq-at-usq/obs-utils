@@ -6,7 +6,7 @@ CAM_ASSETS_DIR="$SCRIPT_DIR/../obs_cameras/assets"
 # Alvium install
 curl -L "https://downloads.alliedvision.com/VimbaX/VimbaX_Setup-2025-3-Linux64.tar.gz" -o "$HOME/Downloads/VimbaX_Setup-2025-3-Linux64.tar.gz"
 mkdir -p "$CAM_ASSETS_DIR"/VimbaX
-tar -xf ~/Downloads/VimbaX_Setup-2025-3-Linux64.tar.gz -C ~"$CAM_ASSETS_DIR"/VimbaX --strip-components=1
+tar -xf ~/Downloads/VimbaX_Setup-2025-3-Linux64.tar.gz -C "$CAM_ASSETS_DIR"/VimbaX --strip-components=1
 sudo "$CAM_ASSETS_DIR"/VimbaX/cti/Install_GenTL_Path.sh
 
 # ZWO install
