@@ -2,7 +2,8 @@ log_raw: false
 log_dir: "~/logs_imu/"
 log_max_rows: 100000 # Max rows to prevent log files that are too large
 protocol: "IPC" # IPC or "TCP" if acrss multiple computers
-address: "/tmp/imu.sock" # or e.g. "*:5000" for TCP
+pub_address: "/tmp/imu.sock" # or e.g. "*:5000" for TCP
+sub_address: "/tmp/imu.sock" # or e.g. "localhost:5000" for TCP
 baudrate: 115200 # Certus defalt
 serials: ["AV0LF8X0","AV0K40ZQ","AV0LG4RT"]
 

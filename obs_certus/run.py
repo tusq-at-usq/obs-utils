@@ -55,7 +55,7 @@ class IMUDisplay:
         table.add_row("Current log file", f"{filepath}")
         table.add_row("Logged rows", f"{file_rows} / {self.config['log_max_rows']}")
         table.add_row(
-            "Broadcast address", f"{self.config['protocol']}://{self.config['address']}"
+            "Broadcast address", f"{self.config['protocol']}://{self.config['pub_address']}"
         )
         return table
 
@@ -121,9 +121,9 @@ class CertusBroadcaster:
         self.socket.set_hwm(1)
         self.socket.setsockopt(zmq.LINGER, 0)
         if self.config["protocol"] == "IPC":
-            self.socket.bind(f"ipc://{self.config['address']}")
+            self.socket.bind(f"ipc://{self.config['pub_address']}")
         elif self.config["protocol"] == "TCP":
-            self.socket.bind(f"tcp://*:{self.config['address']}")
+            self.socket.bind(f"tcp://{self.config['pub_address']}")
         else:
             raise ValueError("Unsupported protocol in config")
 
@@ -142,7 +142,8 @@ class CertusBroadcaster:
             "log_max_rows": 100000,
             "baudrate": 115200,
             "protocol": "IPC",
-            "address": "/tmp/imu.sock",
+            "pub_address": "/tmp/imu.sock",
+            "sub_address:": "/tmp/imu.sock",
             "serials": [
                 "AV0LF8X0",
             ],

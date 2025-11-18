@@ -143,9 +143,9 @@ class CertusMonitor(threading.Thread):
         self._socket.setsockopt(zmq.CONFLATE, 1)
         self._socket.setsockopt(zmq.SUBSCRIBE, b"")
         if self._config["protocol"] == "IPC":
-            self._socket.connect(f"ipc://{self._config['address']}")
+            self._socket.connect(f"ipc://{self._config['sub_address']}")
         elif self._config["protocol"] == "TCP":
-            self._socket.connect(f"tcp://{self._config['address']}")
+            self._socket.connect(f"tcp://{self._config['sub_address']}")
         else:
             raise ValueError("Unsupported protocol in config file")
         self.start()

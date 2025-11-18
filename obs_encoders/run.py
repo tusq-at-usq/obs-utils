@@ -98,9 +98,9 @@ class EncoderBroadcaster:
         self.socket.set_hwm(1)
         self.socket.setsockopt(zmq.LINGER, 0)
         if self.config["protocol"] == "IPC":
-            self.socket.bind(f"ipc://{self.config['address']}")
+            self.socket.bind(f"ipc://{self.config['pub_address']}")
         elif self.config["protocol"] == "TCP":
-            self.socket.bind(f"tcp://*:{self.config['address']}")
+            self.socket.bind(f"tcp://*:{self.config['pub_address']}")
         else:
             raise ValueError("Unsupported protocol in config")
 

@@ -410,7 +410,7 @@ class CameraStream:
         self._cam = cam_ifc
         if foc_len_mm is None:
             foc_len_mm = 35.0  # Default focal length if none provided
-        self._cam_mdl = FixedZoomCamera(
+        self._cam_mdl = FixedZoomCamera.from_foc_len(
             res=self._cam.frame_res,
             sensor_size=self._cam.sensor_size,
             focal_length=foc_len_mm,

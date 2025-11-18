@@ -364,7 +364,7 @@ class Display:
             self.labs[key].setText(key + ": " + str(item))
 
     def update_tracking(self, target: Target, timestamp: float, hpr_euler: NDArray):
-        uv_path, uv_pt = target.project_from_ned_angles(hpr_euler, timestamp)
+        uv_path, uv_pt = target.project_from_ned_angles(hpr_euler, timestamp, self._cam_mdl)
         uv_path *= self._scale_factor
         uv_pt *= self._scale_factor
         grad = np.gradient(uv_path[:, 1], uv_path[:, 0])

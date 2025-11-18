@@ -108,9 +108,9 @@ class EncoderMonitor(threading.Thread):
         self._socket.setsockopt(zmq.SUBSCRIBE, b"")
         self._socket.setsockopt(zmq.RCVTIMEO, 200)  # 100 ms timeout
         if self.config["protocol"] == "IPC":
-            self._socket.connect(f"ipc://{self.config['address']}")
+            self._socket.connect(f"ipc://{self.config['sub_address']}")
         elif self.config["protocol"] == "TCP":
-            self._socket.connect(f"tcp://*:{self.config['address']}")
+            self._socket.connect(f"tcp://*:{self.config['sub_address']}")
         else:
             raise ValueError("Unsupported protocol in config file")
         self.start()

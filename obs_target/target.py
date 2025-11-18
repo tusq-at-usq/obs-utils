@@ -84,7 +84,7 @@ class PathTarget(Target):
         uv_path, uv_point = self._project_from_ecef_angles(euler, t_unix, cam)
         return np.array(uv_path), np.array(uv_point)
 
-    @partial(jax.jit, static_argnames=("self","cam"))
+    @partial(jax.jit, static_argnames=("self", "cam"))
     def _project_from_ned_angles(
         self, euler: ArrayLike, t_unix: float, cam: at.FixedZoomCamera
     ) -> tuple[ArrayLike, ArrayLike]:
