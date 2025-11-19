@@ -186,7 +186,6 @@ class Alvium811(CameraInterface):
         if not self._limits["exposure"][0] <= exp <= self._limits["exposure"][1]:
             print("Clipping exposure to valid range.")
         exp = max(self._limits["exposure"][0], min(self._limits["exposure"][1], exp))
-        print(exp)
         self._vmbcam.ExposureTime.set(exp)
 
     def _set_gain(self, gain: float | str) -> None:
