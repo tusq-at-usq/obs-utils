@@ -37,10 +37,17 @@ class ObsCLI(threading.Thread):
 
         counter = 0
 
+        camera_id = getattr(self._ctx.disp_stream.cam, "cam_id", None)
+        pixel_format = getattr(self._ctx.disp_stream.cam, "pixel_format", None)
+
         progress_print(f"", "\n")
         print_centred("SCOTI: Spatially Calibrated Optical Tracking and Imaging")
         print_centred("------Real-time Controller-------")
         print_centred("Author: Andrew Lock")
+        if camera_id is not None:
+            print_centred(f"Camera ID: {camera_id}")
+        if pixel_format is not None:
+            print_centred(f"Pixel format: {pixel_format}")
 
         while not self._kill_event.is_set():
             try:
@@ -148,6 +155,12 @@ class ObsCLI(threading.Thread):
                                 self._display.set_colourmap(True)
                             elif line[2] == "off":
                                 self._display.set_colourmap(False)
+
+                        elif line[1] == "hist":
+                            if line[2] == "on":
+                                self._display.set_hist_location("bottom")
+                            elif line[2] in ["bottom", "right", "off"]:
+                                self._display.set_hist_location(line[2])
 
                 if inp.startswith("reset "):
                     line = inp.split(" ")

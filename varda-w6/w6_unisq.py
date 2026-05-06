@@ -10,14 +10,37 @@ from obs_utils.context import Context, State
 from obs_cli.cli import ObsCLI
 
 from pathlib import Path
+import yaml
 
 import astrix as at
 
 
+def load_camera_config(config_path: Path) -> dict:
+    defaults = {
+        "camera_id": None,
+        "save_root_dir": "~/test_cam_data",
+        "focal_length_mm": 50,
+        "pixel_format": "Mono8",
+        "sensor_bit_depth": None,
+        "startup_exposure": 20,
+        "startup_gain": 1,
+    }
+
+    if not config_path.exists():
+        return defaults
+
+    with open(config_path, "r") as config_file:
+        loaded = yaml.safe_load(config_file) or {}
+
+    return {**defaults, **loaded}
+
+
 def main():
     script_dir = Path(__file__).resolve().parent
+    camera_config = script_dir / "swir_1312.yaml"
     encoder_config = script_dir / "encoders_config.yaml"
     # imu_config = script_dir / "certus_config.yaml"
+    camera_settings = load_camera_config(camera_config)
 
     # Create objects from data
     path_nom = read_varda_traj(
@@ -26,7 +49,19 @@ def main():
     )
     pt_GS1 = at.Point.from_geodet([-31.988851, 132.437920, 10])
 
-    alv_stream = CameraStream("alv-cam", AlviumU130VSWIR(), "~/test_cam_data", 50)
+    camera = AlviumU130VSWIR()
+    camera.cam_id = camera_settings["camera_id"]
+    camera.pixel_format = camera_settings["pixel_format"]
+    camera.sensor_bit_depth = camera_settings["sensor_bit_depth"]
+    camera.EXP_DEFAULT = camera_settings["startup_exposure"]
+    camera.GAIN_DEFAULT = camera_settings["startup_gain"]
+
+    alv_stream = CameraStream(
+        "alv-cam",
+        camera,
+        camera_settings["save_root_dir"],
+        camera_settings["focal_length_mm"],
+    )
     # zwo_stream = CameraStream("asi-cam", ASI585(), "~/asi_cam_data", 1260)
 
     # Instantiate state and monitors

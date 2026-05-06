@@ -1,0 +1,7 @@
+camera_id: DEV_1AB22C0381E0
+save_root_dir: "~/test_cam_data"
+focal_length_mm: 50
+pixel_format: "Mono12"
+sensor_bit_depth: "Bpp12"
+startup_exposure: 20
+startup_gain: 1
