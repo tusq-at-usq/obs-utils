@@ -222,3 +222,10 @@ class Alvium508(Alvium811):
     SENSOR_SIZE = (2464*3.45*1e-3, 2056*3.45*1e-3)
 
 
+class AlviumU130VSWIR(Alvium811):
+    NAME = "Alvium_U130_VSWIR"
+    MODEL_NO = "U-130"
+    FRAME_RES = (1296, 1032)
+    SENSOR_SIZE = (1296*5*1e-3, 1032*5*1e-3)
+
+
