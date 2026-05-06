@@ -26,6 +26,7 @@ class DisplaySettings:
     colourmap_enabled: bool = False
     hist_enabled: bool = False
     hist_location: str = "bottom"
+    saturation_overlay_enabled: bool = True
 
 
 class Display:
@@ -38,6 +39,7 @@ class Display:
     p1: pg.ViewBox
     hist: pg.HistogramLUTItem | None
     img: pg.ImageItem
+    sat_overlay: pg.ImageItem
     labs: dict
     x_rules: pg.PlotDataItem
     y_rules: pg.PlotDataItem
@@ -89,10 +91,12 @@ class Display:
         self.p1.setAspectLocked()
 
         img = pg.ImageItem()
+        sat_overlay = pg.ImageItem()
         exp_lab = pg.TextItem()
         gain_lab = pg.TextItem()
         fps_lab = pg.TextItem()
         clahe_lab = pg.TextItem()
+        sat_lab = pg.TextItem()
         saving_lab = pg.TextItem()
         save_queue = pg.TextItem()
         time_lab = pg.TextItem()
@@ -103,10 +107,12 @@ class Display:
         track_alt_lab = pg.TextItem()
 
         self.p1.addItem(img)
+        self.p1.addItem(sat_overlay)
         self.p1.addItem(exp_lab)
         self.p1.addItem(gain_lab)
         self.p1.addItem(fps_lab)
         self.p1.addItem(clahe_lab)
+        self.p1.addItem(sat_lab)
         self.p1.addItem(saving_lab)
         self.p1.addItem(save_queue)
         self.p1.addItem(time_lab)
@@ -117,6 +123,8 @@ class Display:
         self.p1.addItem(track_alt_lab)
 
         self.img = img
+        self.sat_overlay = sat_overlay
+        self.sat_overlay.setZValue(10)
         self.hist = None
         self.set_hist_location(self._disp_set.hist_location)
         self.labs = {
@@ -124,6 +132,7 @@ class Display:
             "Gain": gain_lab,
             "FPS": fps_lab,
             "CLAHE": clahe_lab,
+            "SAT": sat_lab,
             "Saving": saving_lab,
             "Save queue": save_queue,
             "Time": time_lab,
@@ -181,8 +190,16 @@ class Display:
             self.set_colourmap(not self._disp_set.colourmap_enabled)
         elif txt in ["H", "h"]:
             self.cycle_hist_location()
+        elif txt in ["R", "r"]:
+            self.set_saturation_overlay(not self._disp_set.saturation_overlay_enabled)
         elif txt in ["Q", "q"]:
             self.close()
+
+    def set_saturation_overlay(self, enabled: bool):
+        with self._disp_lock:
+            self._disp_set.saturation_overlay_enabled = enabled
+            if not enabled:
+                self.sat_overlay.clear()
 
     def set_hist_location(self, location: str):
         location = location.lower()
@@ -243,6 +260,18 @@ class Display:
         else:
             return img
 
+    def downscale_mask(self, mask: np.ndarray) -> np.ndarray:
+        if self._scale_factor != 1.0:
+            new_size = (
+                int(mask.shape[1] * self._scale_factor),
+                int(mask.shape[0] * self._scale_factor),
+            )
+            resized = cv2.resize(
+                mask.astype(np.uint8), new_size, interpolation=cv2.INTER_NEAREST
+            )
+            return resized.astype(bool)
+        return mask.astype(bool)
+
     def signal_new_stream(self):
         self._new_stream_event.set()
 
@@ -285,6 +314,10 @@ class Display:
         self.labs["CLAHE"].setFont(QtGui.QFont("monospace", 12, 150))
         self.labs["CLAHE"].setColor("white")
         self.labs["CLAHE"].setPos(*rescale(20, 105))
+
+        self.labs["SAT"].setFont(QtGui.QFont("monospace", 12, 150))
+        self.labs["SAT"].setColor("white")
+        self.labs["SAT"].setPos(*rescale(20, 130))
 
         self.labs["Gain"].setFont(QtGui.QFont("monospace", 12, 150))
         self.labs["Gain"].setColor("white")
@@ -363,7 +396,80 @@ class Display:
         )
         return norm_img
 
-    def update_img(self, img):
+    def _resolve_sensor_bit_depth(self, img: np.ndarray) -> int | None:
+        sensor_bit_depth = getattr(self._stream.cam, "sensor_bit_depth", None)
+        pixel_format = getattr(self._stream.cam, "pixel_format", "")
+
+        if isinstance(sensor_bit_depth, str) and sensor_bit_depth.startswith("Bpp"):
+            try:
+                return int(sensor_bit_depth[3:])
+            except ValueError:
+                pass
+        if isinstance(sensor_bit_depth, int):
+            return sensor_bit_depth
+
+        if isinstance(pixel_format, str):
+            digits = "".join(ch for ch in pixel_format if ch.isdigit())
+            if digits:
+                return int(digits)
+
+        if np.issubdtype(img.dtype, np.integer):
+            return int(np.iinfo(img.dtype).bits)
+        return None
+
+    def get_saturation_limits(self, img: np.ndarray) -> tuple[int, int] | None:
+        if not np.issubdtype(img.dtype, np.integer):
+            return None
+        bit_depth = self._resolve_sensor_bit_depth(img)
+        if bit_depth is None:
+            return None
+
+        dtype_bits = int(np.iinfo(img.dtype).bits)
+        full_scale = (1 << bit_depth) - 1
+        right_aligned_limit = full_scale
+        if bit_depth < dtype_bits:
+            left_shift = dtype_bits - bit_depth
+            left_aligned_limit = full_scale << left_shift
+        else:
+            left_aligned_limit = full_scale
+        return right_aligned_limit, left_aligned_limit
+
+    def compute_saturation_mask(self, img: np.ndarray) -> np.ndarray | None:
+        if not np.issubdtype(img.dtype, np.integer):
+            return None
+
+        sat_limits = self.get_saturation_limits(img)
+        if sat_limits is None:
+            return None
+
+        right_limit, left_limit = sat_limits
+        threshold_pad = 1
+
+        if img.ndim == 2:
+            sat_right = img >= max(0, right_limit - threshold_pad)
+            sat_left = img >= max(0, left_limit - threshold_pad)
+            return sat_right | sat_left
+        if img.ndim == 3:
+            sat_right = np.any(img >= max(0, right_limit - threshold_pad), axis=2)
+            sat_left = np.any(img >= max(0, left_limit - threshold_pad), axis=2)
+            return sat_right | sat_left
+        return None
+
+    def _update_saturation_overlay(self, saturation_mask: np.ndarray | None = None):
+        if not self._disp_set.saturation_overlay_enabled or saturation_mask is None:
+            self.sat_overlay.clear()
+            return
+
+        if saturation_mask.ndim != 2:
+            self.sat_overlay.clear()
+            return
+
+        overlay = np.zeros((saturation_mask.shape[0], saturation_mask.shape[1], 4), dtype=np.uint8)
+        overlay[saturation_mask, 0] = 255
+        overlay[saturation_mask, 3] = 180
+        self.sat_overlay.setImage(overlay, axis=0)
+
+    def update_img(self, img, saturation_mask: np.ndarray | None = None):
         """Update the image displayed in the window.
         Note: This img is assumed to be 8-bit grayscale.
         Args:
@@ -393,7 +499,14 @@ class Display:
             except:
                 warnings.warn("Can't apply colourmap")
                 self.set_colourmap(False)
+
         self.img.setImage(img, axis=0)
+        try:
+            sat_mask = None if saturation_mask is None else saturation_mask.astype(bool)
+            self._update_saturation_overlay(sat_mask)
+        except Exception as e:
+            warnings.warn(f"Can't apply saturation overlay: {e}")
+            self.sat_overlay.clear()
         # self.img.setImage(img, axis=0, levels=[0, 255])
 
     def update_labels(self, lab_data: dict):
@@ -517,12 +630,16 @@ class Display:
                     self.change_stream()
                 frame = self._stream.latest_frame()
                 if frame is not None:
+                    raw_pixels = frame.pixels
+                    raw_sat_mask = self.compute_saturation_mask(raw_pixels)
+
                     frame = self._stream.cam.convert_for_monitoring(frame)
                     lab_data = {
                         "Exp": frame.exposure,
                         "Gain": frame.gain,
                         "FPS": np.round(self._stream.cam.frame_rate, 2),
                         "CLAHE": "Enabled" if self._disp_set.clahe_enabled else "",
+                        "SAT": "Enabled" if self._disp_set.saturation_overlay_enabled else "",
                         "Saving": (
                             "Enabled" if self._stream.save_enabled else "Disabled"
                         ),
@@ -562,7 +679,12 @@ class Display:
                             pass
 
                     img = self.downscale_img(frame.pixels)
-                    self.update_img(img)
+                    saturation_mask = raw_sat_mask
+                    if saturation_mask is not None:
+                        saturation_mask = self._stream.cam.convert_mask_for_monitoring(saturation_mask)
+                    if saturation_mask is not None:
+                        saturation_mask = self.downscale_mask(saturation_mask)
+                    self.update_img(img, saturation_mask=saturation_mask)
                     self.update_labels(lab_data)
                     self.app.processEvents()
         finally:

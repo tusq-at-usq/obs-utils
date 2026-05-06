@@ -183,6 +183,17 @@ class CameraInterface(ABC):
         """
         return frame
 
+    def convert_mask_for_monitoring(self, mask: NDArray) -> NDArray:
+        """Convert a mask into monitoring/display coordinates.
+
+        Args:
+            mask: Boolean or integer mask in raw camera coordinates.
+
+        Returns:
+            Mask transformed into the same orientation as ``convert_for_monitoring``.
+        """
+        return mask
+
     # Additional methods
 
     # def read_config(self, filepath) -> None:

@@ -289,6 +289,12 @@ class Alvium811(CameraInterface):
         return Frame(pix, frame.gain, frame.exposure, frame.timestamp, frame.cam_name)
         self._vmbcam.Gain.set(gain)
 
+    def convert_mask_for_monitoring(self, mask):
+        if mask.dtype == bool:
+            rotated = cv2.rotate(mask.astype("uint8"), cv2.ROTATE_90_CLOCKWISE)
+            return rotated.astype(bool)
+        return cv2.rotate(mask, cv2.ROTATE_90_CLOCKWISE)
+
 
 class Alvium508(Alvium811):
     NAME = "Alvium_508"

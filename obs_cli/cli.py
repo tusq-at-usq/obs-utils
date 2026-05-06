@@ -162,6 +162,12 @@ class ObsCLI(threading.Thread):
                             elif line[2] in ["bottom", "right", "off"]:
                                 self._display.set_hist_location(line[2])
 
+                        elif line[1] == "sat":
+                            if line[2] == "on":
+                                self._display.set_saturation_overlay(True)
+                            elif line[2] == "off":
+                                self._display.set_saturation_overlay(False)
+
                 if inp.startswith("reset "):
                     line = inp.split(" ")
                     if line[1] == "limits":
