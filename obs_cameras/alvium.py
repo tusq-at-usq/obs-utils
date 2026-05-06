@@ -165,8 +165,8 @@ class Alvium811(CameraInterface):
             "gain": self._vmbcam.Gain.get_range(),
             "gain_incr": self._vmbcam.Gain.get_increment(),
         }
-        self.set_exposure(self.EXP_DEFAULT)
-        self.set_gain(self.GAIN_DEFAULT)
+        self.set_exposure(self._exposure_set if self._exposure_set else self.EXP_DEFAULT)
+        self.set_gain(self._gain_set if self._gain_set else self.GAIN_DEFAULT)
         self.start_video()
 
         return self
