@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "obs-utils"
 version = "0.1.0"
@@ -28,7 +32,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["obs_utils", "obs_tui", "obs_certus", "obs_encoders", "obs_display", "obs_cameras", "obs_controller", "obs_target"]
+packages = ["obs_utils", "obs_tui", "obs_certus", "obs_encoders", "obs_display", "obs_cameras", "obs_controller", "obs_target", "obs_cli"]
 
 [project.scripts]
 obs-tui = "obs_tui.__main__:main"
