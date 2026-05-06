@@ -27,6 +27,7 @@ class DisplaySettings:
     hist_enabled: bool = False
     hist_location: str = "bottom"
     saturation_overlay_enabled: bool = True
+    text_overlay_location: str = "right"
 
 
 class Display:
@@ -46,8 +47,26 @@ class Display:
     _scale_factor: float
     _display_res: tuple[int, int]
     _width: int
+    _sidebar_width: int
+    _footer_height: int
 
     _disp_set: DisplaySettings
+
+    _HINTS: dict = {
+        "Exp":        "e/E",
+        "Gain":       "g/G",
+        "FPS":        "",
+        "CLAHE":      "c",
+        "SAT":        "r",
+        "Saving":     "s",
+        "Save queue": "",
+        "GIM":        "",
+        "IMU":        "",
+        "TAR":        "",
+        "TrackAlt":   "",
+        "Hist":       "h",
+        "Layout":     "l",
+    }
 
     _ctx: Context
     _stream: CameraStream
@@ -76,6 +95,8 @@ class Display:
         self._target = target
 
         self._width = 1920
+        self._sidebar_width = 420
+        self._footer_height = 120
 
         self._disp_lock = threading.RLock()
         self._kill_event = threading.Event()
@@ -99,12 +120,13 @@ class Display:
         sat_lab = pg.TextItem()
         saving_lab = pg.TextItem()
         save_queue = pg.TextItem()
-        time_lab = pg.TextItem()
         gimb_angles_lab = pg.TextItem()
         target_angles_lab = pg.TextItem()
         imu_angles_lab = pg.TextItem()
         orient_cal_lab = pg.TextItem()
         track_alt_lab = pg.TextItem()
+        hist_lab = pg.TextItem()
+        layout_lab = pg.TextItem()
 
         self.p1.addItem(img)
         self.p1.addItem(sat_overlay)
@@ -115,12 +137,13 @@ class Display:
         self.p1.addItem(sat_lab)
         self.p1.addItem(saving_lab)
         self.p1.addItem(save_queue)
-        self.p1.addItem(time_lab)
         self.p1.addItem(gimb_angles_lab)
         self.p1.addItem(target_angles_lab)
         self.p1.addItem(imu_angles_lab)
         self.p1.addItem(orient_cal_lab)
         self.p1.addItem(track_alt_lab)
+        self.p1.addItem(hist_lab)
+        self.p1.addItem(layout_lab)
 
         self.img = img
         self.sat_overlay = sat_overlay
@@ -135,11 +158,12 @@ class Display:
             "SAT": sat_lab,
             "Saving": saving_lab,
             "Save queue": save_queue,
-            "Time": time_lab,
             "GIM": gimb_angles_lab,
             "IMU": imu_angles_lab,
             "TAR": target_angles_lab,
             "TrackAlt": track_alt_lab,
+            "Hist": hist_lab,
+            "Layout": layout_lab,
         }
 
         self.x_rules = pg.PlotDataItem()
@@ -192,6 +216,8 @@ class Display:
             self.cycle_hist_location()
         elif txt in ["R", "r"]:
             self.set_saturation_overlay(not self._disp_set.saturation_overlay_enabled)
+        elif txt in ["L", "l"]:
+            self.cycle_text_overlay_location()
         elif txt in ["Q", "q"]:
             self.close()
 
@@ -229,6 +255,26 @@ class Display:
         }[current]
         self.set_hist_location(next_location)
 
+    def set_text_overlay_location(self, location: str):
+        location = location.lower()
+        if location not in {"right", "bottom", "overlay"}:
+            raise ValueError("Text overlay location must be one of: right, bottom, overlay")
+
+        with self._disp_lock:
+            self._disp_set.text_overlay_location = location
+            self.set_bounds()
+            self._position_text_labels()
+            self.app.processEvents()
+
+    def cycle_text_overlay_location(self):
+        current = self._disp_set.text_overlay_location
+        next_location = {
+            "right": "bottom",
+            "bottom": "overlay",
+            "overlay": "right",
+        }[current]
+        self.set_text_overlay_location(next_location)
+
     def set_bounds(self):
         # self.img_size = self._stream.cam.frame_res
         aspect = self._stream.cam.frame_res[0] / self._stream.cam.frame_res[1]
@@ -237,9 +283,19 @@ class Display:
         self._scale_factor = self._display_res[0] / self._stream.cam.frame_res[0]
 
         # Set constant bounds for the view
+        if self._disp_set.text_overlay_location == "right":
+            x_range = (0, self._display_res[0] + self._sidebar_width)
+            y_range = (0, self._display_res[1])
+        elif self._disp_set.text_overlay_location == "bottom":
+            x_range = (0, self._display_res[0])
+            y_range = (0, self._display_res[1] + self._footer_height)
+        else:  # overlay
+            x_range = (0, self._display_res[0])
+            y_range = (0, self._display_res[1])
+
         self.p1.setRange(
-            xRange=(0, self._display_res[0]),
-            yRange=(0, self._display_res[1]),
+            xRange=x_range,
+            yRange=y_range,
             padding=0,
         )
 
@@ -289,10 +345,21 @@ class Display:
         #     int(self._width * 0.8),
         #     int(self._width * 0.8 * (1 / img_ratio) - 100),
         # )
-        win_dims = (
-            int(self._width * 1),
-            int(self._width * 1 * (1 / img_ratio)),
-        )
+        if self._disp_set.text_overlay_location == "right":
+            win_dims = (
+                int(self._width + self._sidebar_width),
+                int(self._width * (1 / img_ratio)),
+            )
+        elif self._disp_set.text_overlay_location == "bottom":
+            win_dims = (
+                int(self._width),
+                int(self._width * (1 / img_ratio) + self._footer_height),
+            )
+        else:  # overlay
+            win_dims = (
+                int(self._width),
+                int(self._width * (1 / img_ratio)),
+            )
         self.win.resize(*win_dims)
 
         # Private re-scale function just for labels
@@ -307,53 +374,8 @@ class Display:
                 y_ = self._display_res[1] + y * self._display_res[1] / 1080
             return x_, y_
 
-        self.labs["FPS"].setFont(QtGui.QFont("monospace", 12, 150))
-        self.labs["FPS"].setColor("white")
-        self.labs["FPS"].setPos(*rescale(20, 30))
-
-        self.labs["CLAHE"].setFont(QtGui.QFont("monospace", 12, 150))
-        self.labs["CLAHE"].setColor("white")
-        self.labs["CLAHE"].setPos(*rescale(20, 105))
-
-        self.labs["SAT"].setFont(QtGui.QFont("monospace", 12, 150))
-        self.labs["SAT"].setColor("white")
-        self.labs["SAT"].setPos(*rescale(20, 130))
-
-        self.labs["Gain"].setFont(QtGui.QFont("monospace", 12, 150))
-        self.labs["Gain"].setColor("white")
-        self.labs["Gain"].setPos(*rescale(20, 55))
-
-        self.labs["Exp"].setFont(QtGui.QFont("monospace", 12, 150))
-        self.labs["Exp"].setColor("white")
-        self.labs["Exp"].setPos(*rescale(20, 80))
-
-        self.labs["Saving"].setPos(*rescale(-250, -30))
-        self.labs["Saving"].setFont(QtGui.QFont("monospace", 11, 700))
-        self.labs["Saving"].setColor("r")
-
-        self.labs["Save queue"].setPos(*rescale(-250, -55))
-        self.labs["Save queue"].setFont(QtGui.QFont("monospace", 11, 700))
-        self.labs["Save queue"].setColor("r")
-
-        self.labs["Time"].setPos(*rescale(30, -30))
-        self.labs["Time"].setFont(QtGui.QFont("monospace", 11, 100))
-        self.labs["Time"].setColor("g")
-
-        self.labs["GIM"].setPos(*rescale(-300, 30))
-        self.labs["GIM"].setFont(QtGui.QFont("monospace", 11, 100))
-        self.labs["GIM"].setColor("g")
-
-        self.labs["IMU"].setPos(*rescale(-300, 55))
-        self.labs["IMU"].setFont(QtGui.QFont("monospace", 11, 700))
-        self.labs["IMU"].setColor("g")
-
-        self.labs["TAR"].setPos(*rescale(-300, 80))
-        self.labs["TAR"].setFont(QtGui.QFont("monospace", 11, 150))
-        self.labs["TAR"].setColor("r")
-
-        self.labs["TrackAlt"].setPos(*rescale(-300, 90))
-        self.labs["TrackAlt"].setFont(QtGui.QFont("monospace", 11, 150))
-        self.labs["TrackAlt"].setColor("g")
+        self._set_text_label_styles()
+        self._position_text_labels()
 
         self.crosshairs()
 
@@ -361,6 +383,132 @@ class Display:
         # self.win.showMaximized()
         self.win.setContentsMargins(0, 0, 0, 0)
         self.win.show()
+
+    def _set_text_label_styles(self):
+        is_bottom = self._disp_set.text_overlay_location == "bottom"
+
+        self.labs["FPS"].setFont(QtGui.QFont("monospace", 11, 150))
+        self.labs["FPS"].setColor("cyan")
+
+        self.labs["CLAHE"].setFont(QtGui.QFont("monospace", 10, 150))
+        self.labs["CLAHE"].setColor("cyan")
+
+        self.labs["SAT"].setFont(QtGui.QFont("monospace", 10, 150))
+        self.labs["SAT"].setColor("cyan")
+
+        self.labs["Gain"].setFont(QtGui.QFont("monospace", 11, 150))
+        self.labs["Gain"].setColor("cyan")
+
+        self.labs["Exp"].setFont(QtGui.QFont("monospace", 11, 150))
+        self.labs["Exp"].setColor("cyan")
+
+        saving_size = 15 if is_bottom else 13
+        self.labs["Saving"].setFont(QtGui.QFont("monospace", saving_size, 700))
+        self.labs["Saving"].setColor("r")
+
+        self.labs["Save queue"].setFont(QtGui.QFont("monospace", 10, 700))
+        self.labs["Save queue"].setColor("r")
+
+        gim_size = 14 if is_bottom else 12
+        self.labs["GIM"].setFont(QtGui.QFont("monospace", gim_size, 700))
+        self.labs["GIM"].setColor("g")
+
+        self.labs["IMU"].setFont(QtGui.QFont("monospace", 11, 500))
+        self.labs["IMU"].setColor("g")
+
+        tar_size = 14 if is_bottom else 12
+        self.labs["TAR"].setFont(QtGui.QFont("monospace", tar_size, 700))
+        self.labs["TAR"].setColor("y")
+
+        self.labs["TrackAlt"].setFont(QtGui.QFont("monospace", 10, 150))
+        self.labs["TrackAlt"].setColor("g")
+
+        self.labs["Hist"].setFont(QtGui.QFont("monospace", 10, 150))
+        self.labs["Hist"].setColor("cyan")
+        self.labs["Hist"].setText("Hist  [h]")
+
+        self.labs["Layout"].setFont(QtGui.QFont("monospace", 10, 150))
+        self.labs["Layout"].setColor("cyan")
+        self.labs["Layout"].setText("Layout  [l]")
+
+    def _position_text_labels(self):
+        ys = self._display_res[1] / 1080  # y scale factor
+        xs = self._display_res[0] / 1920  # x scale factor
+
+        if self._disp_set.text_overlay_location == "overlay":
+            # Top-left: camera controls
+            self.labs["FPS"].setPos(20 * xs,   self._display_res[1] - 30 * ys)
+            self.labs["Gain"].setPos(20 * xs,  self._display_res[1] - 55 * ys)
+            self.labs["Exp"].setPos(20 * xs,   self._display_res[1] - 80 * ys)
+            self.labs["CLAHE"].setPos(20 * xs, self._display_res[1] - 105 * ys)
+            self.labs["SAT"].setPos(20 * xs,   self._display_res[1] - 130 * ys)
+            # Top-right: recording
+            self.labs["Saving"].setPos(self._display_res[0] - 200 * xs, self._display_res[1] - 30 * ys)
+            self.labs["Save queue"].setPos(self._display_res[0] - 200 * xs, self._display_res[1] - 55 * ys)
+            # Bottom-left: pointing
+            self.labs["TAR"].setPos(20 * xs,       80 * ys)
+            self.labs["GIM"].setPos(20 * xs,       55 * ys)
+            self.labs["IMU"].setPos(20 * xs,       30 * ys)
+            # Bottom-right: misc
+            self.labs["TrackAlt"].setPos(self._display_res[0] - 200 * xs, 80 * ys)
+            self.labs["Hist"].setPos(self._display_res[0] - 200 * xs,    55 * ys)
+            self.labs["Layout"].setPos(self._display_res[0] - 200 * xs,  30 * ys)
+            return
+
+        if self._disp_set.text_overlay_location == "right":
+            x = self._display_res[0] + 20
+            # Groups separated by 15px gap within, 30px between groups
+            y_map = {
+                # --- Recording ---
+                "Saving":     30,
+                "Save queue": 55,
+                # --- Pointing ---
+                "TAR":        100,
+                "GIM":        125,
+                "IMU":        150,
+                # --- Camera ---
+                "Exp":        195,
+                "Gain":       220,
+                "FPS":        245,
+                # --- Display ---
+                "CLAHE":      290,
+                "SAT":        315,
+                "TrackAlt":   340,
+                # --- Controls ---
+                "Hist":       385,
+                "Layout":     410,
+            }
+            for key, y in y_map.items():
+                self.labs[key].setPos(x, y * ys)
+            return
+
+        xs = self._display_res[0] / 1920   # x scale factor
+        y1 = self._display_res[1] + 72     # primary row   (visually top of strip)
+        y2 = self._display_res[1] + 42     # secondary row
+        y3 = self._display_res[1] + 12     # tertiary row  (visually bottom of strip)
+
+        # --- group 1: Recording (left) ----------------------
+        self.labs["Saving"].setPos(20 * xs, y1)
+        self.labs["Save queue"].setPos(20 * xs, y2)
+        self.labs["FPS"].setPos(20 * xs, y3)
+
+        # --- group 2: Pointing (left-centre) ----------------
+        self.labs["TAR"].setPos(380 * xs, y1)
+        self.labs["GIM"].setPos(380 * xs, y2)
+        self.labs["IMU"].setPos(730 * xs, y2)
+
+        # --- group 3: Camera (right-centre) -----------------
+        self.labs["Exp"].setPos(1060 * xs, y1)
+        self.labs["Gain"].setPos(1060 * xs, y2)
+
+        # --- group 4: Display (right) -----------------------
+        self.labs["CLAHE"].setPos(1480 * xs, y1)
+        self.labs["SAT"].setPos(1480 * xs, y2)
+        self.labs["TrackAlt"].setPos(1680 * xs, y2)
+
+        # --- group 5: Controls (far right) ------------------
+        self.labs["Hist"].setPos(1750 * xs, y1)
+        self.labs["Layout"].setPos(1750 * xs, y2)
 
     def set_clahe(self, enabled: bool, clip_limit: float = 2.0):
         with self._disp_lock:
@@ -509,9 +657,15 @@ class Display:
             self.sat_overlay.clear()
         # self.img.setImage(img, axis=0, levels=[0, 255])
 
+    _STATIC_LABS = {"Hist", "Layout"}
+
     def update_labels(self, lab_data: dict):
         for key, item in lab_data.items():
-            self.labs[key].setText(key + ": " + str(item))
+            if key in self._STATIC_LABS:
+                continue
+            hint = self._HINTS.get(key, "")
+            suffix = f"  [{hint}]" if hint else ""
+            self.labs[key].setText(key + ": " + str(item) + suffix)
 
     def update_tracking(self, target: Target, timestamp: float, hpr_euler: NDArray):
         uv_path, uv_pt = target.project_from_ned_angles(hpr_euler, timestamp, self._cam_mdl)
@@ -635,23 +789,23 @@ class Display:
 
                     frame = self._stream.cam.convert_for_monitoring(frame)
                     lab_data = {
-                        "Exp": frame.exposure,
-                        "Gain": frame.gain,
-                        "FPS": np.round(self._stream.cam.frame_rate, 2),
+                        "Exp": f"{frame.exposure:.1f}",
+                        "Gain": f"{frame.gain:.1f}",
+                        "FPS": f"{self._stream.cam.frame_rate:.1f}",
                         "CLAHE": "Enabled" if self._disp_set.clahe_enabled else "",
                         "SAT": "Enabled" if self._disp_set.saturation_overlay_enabled else "",
                         "Saving": (
-                            "Enabled" if self._stream.save_enabled else "Disabled"
+                            "REC" if self._stream.save_enabled else "IDLE"
                         ),
                         "Save queue": self._stream.save_queue_length,
-                        "Time": datetime.datetime.fromtimestamp(
-                            frame.timestamp, tz=datetime.timezone.utc
-                        ).strftime("%H:%M:%S.%f")[:-5],
                     }
+                    self.labs["Saving"].setColor(
+                        "g" if self._stream.save_enabled else "r"
+                    )
                     if self._target is not None:
                         try:
                             hp = self._target.get_head_pitch(frame.timestamp)
-                            lab_data["TAR"] = f"Head {hp[0]:.2f} Pitch {hp[1]:.2f}"
+                            lab_data["TAR"] = f"Az {hp[0]:>7.1f}  El {hp[1]:>6.1f}"
                         except Exception as e:
                             warnings.warn(f"Could not get target data: {e}")
                             pass
@@ -660,7 +814,7 @@ class Display:
                             # euler = self._state.extrap_imu_state(frame.timestamp, pc_time=True).hpr
                             euler = self._state.imu_state.hpr
                             lab_data["IMU"] = (
-                                f"Head {euler[0]:.2f} Pitch {euler[1]:.2f}"
+                                f"Az {euler[0]:>7.1f}  El {euler[1]:>6.1f}"
                             )
                             if self._target is not None:
                                 self.update_tracking(self._target, frame.timestamp, np.array(euler))
@@ -674,7 +828,7 @@ class Display:
                     if self._ctx.has_enc_monitor:
                         try:
                             azel = self._state.encoder_state.azel
-                            lab_data["GIM"] = f"Az {azel[0]:.2f}, El {azel[1]:.2f}"
+                            lab_data["GIM"] = f"Az {azel[0]:>7.1f}  El {azel[1]:>6.1f}"
                         except:
                             pass
 
