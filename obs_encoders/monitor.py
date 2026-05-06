@@ -83,15 +83,22 @@ class EncoderMonitor(threading.Thread):
     _socket: zmq.Socket
     _sinks: list[EncoderSink] | None
     _kill_event: threading.Event
+    _swap_az_el: bool
 
     def __init__(
         self,
         config_filepath=DEFAULT_CONFIG_PATH,
         sink: EncoderSink | Iterable[EncoderSink] | None = None,
+        swap_az_el: bool | None = None,
     ):
         super().__init__()
         with open(config_filepath, "r") as f:
             self.config = yaml.safe_load(f)
+
+        if swap_az_el is None:
+            self._swap_az_el = bool(self.config.get("swap_az_el", False))
+        else:
+            self._swap_az_el = swap_az_el
 
         if callable(sink):
             self._sinks = [sink]
@@ -120,6 +127,17 @@ class EncoderMonitor(threading.Thread):
         self._kill_event.set()
         self.join()
 
+    def _apply_axis_config(self, state: EncoderState) -> EncoderState:
+        if not self._swap_az_el:
+            return state
+        return EncoderState(
+            az=state.el,
+            el=state.az,
+            az_raw=state.el_raw,
+            el_raw=state.az_raw,
+            t=state.t,
+        )
+
     def run(self) -> None:
         """Get the latest azimuth and elevation from the ZMQ stream."""
         try:
@@ -135,6 +153,7 @@ class EncoderMonitor(threading.Thread):
                         el_raw=float(data["El_raw"]),
                         t=float(data["Sec"]),
                     )
+                    state = self._apply_axis_config(state)
 
                     if self._sinks:
                         for sink in self._sinks:
