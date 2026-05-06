@@ -25,6 +25,7 @@ class DisplaySettings:
     norm_enabled: bool = False
     colourmap_enabled: bool = False
     hist_enabled: bool = False
+    hist_location: str = "bottom"
 
 
 class Display:
@@ -35,6 +36,7 @@ class Display:
     app: PyQt6.QtWidgets.QApplication
     win: pg.GraphicsLayoutWidget
     p1: pg.ViewBox
+    hist: pg.HistogramLUTItem | None
     img: pg.ImageItem
     labs: dict
     x_rules: pg.PlotDataItem
@@ -87,7 +89,6 @@ class Display:
         self.p1.setAspectLocked()
 
         img = pg.ImageItem()
-        hist = pg.HistogramLUTItem(img, orientation="vertical")
         exp_lab = pg.TextItem()
         gain_lab = pg.TextItem()
         fps_lab = pg.TextItem()
@@ -101,7 +102,6 @@ class Display:
         orient_cal_lab = pg.TextItem()
         track_alt_lab = pg.TextItem()
 
-        self.win.addItem(hist, 0, 1)
         self.p1.addItem(img)
         self.p1.addItem(exp_lab)
         self.p1.addItem(gain_lab)
@@ -117,6 +117,8 @@ class Display:
         self.p1.addItem(track_alt_lab)
 
         self.img = img
+        self.hist = None
+        self.set_hist_location(self._disp_set.hist_location)
         self.labs = {
             "Exp": exp_lab,
             "Gain": gain_lab,
@@ -177,8 +179,38 @@ class Display:
             self.set_norm(not self._disp_set.norm_enabled)
         elif txt in ["M", "m"]:
             self.set_colourmap(not self._disp_set.colourmap_enabled)
+        elif txt in ["H", "h"]:
+            self.cycle_hist_location()
         elif txt in ["Q", "q"]:
             self.close()
+
+    def set_hist_location(self, location: str):
+        location = location.lower()
+        if location not in {"bottom", "right", "off"}:
+            raise ValueError("Histogram location must be one of: bottom, right, off")
+
+        if self.hist is not None:
+            self.win.removeItem(self.hist)
+            self.hist = None
+
+        if location != "off":
+            orientation = "horizontal" if location == "bottom" else "vertical"
+            self.hist = pg.HistogramLUTItem(self.img, orientation=orientation)
+            if location == "bottom":
+                self.win.addItem(self.hist, 1, 0)
+            else:
+                self.win.addItem(self.hist, 0, 1)
+
+        self._disp_set.hist_location = location
+
+    def cycle_hist_location(self):
+        current = self._disp_set.hist_location
+        next_location = {
+            "bottom": "right",
+            "right": "off",
+            "off": "bottom",
+        }[current]
+        self.set_hist_location(next_location)
 
     def set_bounds(self):
         # self.img_size = self._stream.cam.frame_res
