@@ -12,6 +12,8 @@ class Alvium811(CameraInterface):
     FRAME_RES = (2848, 2848)
     SENSOR_SIZE = (2848*2.74*1e-3, 2848*2.74*1e-3)
     DTYPE = "uint8"
+    PIXEL_FORMAT = "Mono8"
+    SENSOR_BIT_DEPTH = None
     GAIN_DEFAULT = 1
     EXP_DEFAULT = 20
 
@@ -26,6 +28,8 @@ class Alvium811(CameraInterface):
     def __init__(self):
         super().__init__()
         self.cam_id = None
+        self.pixel_format = self.PIXEL_FORMAT
+        self.sensor_bit_depth = self.SENSOR_BIT_DEPTH
         self._frame_delivered = threading.Event()
 
 
@@ -68,6 +72,73 @@ class Alvium811(CameraInterface):
                 pass
         return cam_dict
 
+    def _resolve_pixel_format(self, pixel_format_name: str) -> vmbpy.PixelFormat:
+        try:
+            return getattr(vmbpy.PixelFormat, pixel_format_name)
+        except AttributeError as exc:
+            raise ValueError(f"Unsupported Alvium pixel format: {pixel_format_name}") from exc
+
+    def _pixel_format_name(self, pixel_format: object) -> str:
+        name = getattr(pixel_format, "name", None)
+        if isinstance(name, str):
+            return name
+
+        pixel_format_str = str(pixel_format)
+        if "." in pixel_format_str:
+            return pixel_format_str.rsplit(".", 1)[-1]
+        return pixel_format_str
+
+    def _validate_supported_pixel_format(
+        self, requested_pixel_format: vmbpy.PixelFormat
+    ) -> None:
+        supported_formats = []
+        if hasattr(self._vmbcam, "get_pixel_formats"):
+            supported_formats = list(self._vmbcam.get_pixel_formats())
+
+        if supported_formats and requested_pixel_format not in supported_formats:
+            supported_names = ", ".join(
+                self._pixel_format_name(pixel_format)
+                for pixel_format in supported_formats
+            )
+            raise ValueError(
+                f"Pixel format '{self.pixel_format}' is not supported by camera {self.cam_id}. "
+                f"Supported formats: {supported_names}"
+            )
+
+    def _pixel_dtype_for_format(self, pixel_format_name: str) -> str:
+        if pixel_format_name == "Mono8":
+            return "uint8"
+        if pixel_format_name.startswith("Mono"):
+            return "uint16"
+        return self.DTYPE
+
+    def _apply_sensor_bit_depth(self) -> None:
+        if self.sensor_bit_depth in [None, "", "default"]:
+            return
+
+        if not hasattr(self._vmbcam, "SensorBitDepth"):
+            raise ValueError(
+                f"Camera {self.cam_id} does not expose a SensorBitDepth feature"
+            )
+
+        try:
+            self._vmbcam.SensorBitDepth.set(self.sensor_bit_depth)
+        except Exception as exc:
+            current_value = None
+            try:
+                current_value = self._vmbcam.SensorBitDepth.get()
+            except Exception:
+                pass
+
+            if current_value is not None:
+                raise ValueError(
+                    f"Unsupported sensor bit depth '{self.sensor_bit_depth}' for camera {self.cam_id}. "
+                    f"Current sensor bit depth is '{current_value}'."
+                ) from exc
+            raise ValueError(
+                f"Failed to set sensor bit depth '{self.sensor_bit_depth}' for camera {self.cam_id}."
+            ) from exc
+
     def __enter__(self) -> CameraInterface:
         """Enter the runtime context related to this object."""
         _vmb = vmbpy.VmbSystem.get_instance()
@@ -82,7 +153,11 @@ class Alvium811(CameraInterface):
             raise RuntimeError("Failed to connect to camera.")
 
         self._vmbcam.stop_streaming()
-        self._vmbcam.set_pixel_format(vmbpy.PixelFormat.Mono8)
+        self._apply_sensor_bit_depth()
+        requested_pixel_format = self._resolve_pixel_format(self.pixel_format)
+        self._validate_supported_pixel_format(requested_pixel_format)
+        self._vmbcam.set_pixel_format(requested_pixel_format)
+        self.DTYPE = self._pixel_dtype_for_format(self.pixel_format)
         self._vmbcam.DeviceLinkThroughputLimit.set(400e6)
         self._limits = {
             "exposure": self._vmbcam.ExposureTime.get_range(),
