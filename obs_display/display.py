@@ -805,7 +805,10 @@ class Display:
                     if self._target is not None:
                         try:
                             hp = self._target.get_head_pitch(frame.timestamp)
-                            lab_data["TAR"] = f"Az {hp[0]:>7.1f}  El {hp[1]:>6.1f}"
+                            tar_text = f"Az {hp[0]:>7.1f}  El {hp[1]:>6.1f}"
+                            if hasattr(self._target, "format_target_label"):
+                                tar_text = self._target.format_target_label(frame.timestamp, hp)
+                            lab_data["TAR"] = tar_text
                         except Exception as e:
                             warnings.warn(f"Could not get target data: {e}")
                             pass
