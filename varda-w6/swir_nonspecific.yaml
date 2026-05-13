@@ -1,5 +1,5 @@
-camera_id: DEV_1AB22C0381DF
-save_root_dir: "~/W6/swir_2"
+camera_id: null
+save_root_dir: "~/W6/swir_tmp"
 focal_length_mm: 25
 pixel_format: "Mono12"
 sensor_bit_depth: "Bpp12"
