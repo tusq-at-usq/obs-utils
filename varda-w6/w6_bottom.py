@@ -17,7 +17,7 @@ import astrix as at
 
 OverlayMode = Literal["SIMULATE_REENTRY", "CSV_ABSOLUTE_TIME"]
 
-SCRIPT_CAMERA_CONFIG = "swir_nonspecific.yaml"
+SCRIPT_CAMERA_CONFIG = "swir_bottom.yaml"
 SCRIPT_ENCODER_CONFIG = "encoders_config.yaml"
 SCRIPT_AZEL_CSV = "varda-w6/20260512_GS_Az-El_data.csv"
 DEFAULT_OVERLAY_MODE: OverlayMode = "SIMULATE_REENTRY"
