@@ -45,8 +45,10 @@ def _build_camera_stream(camera_settings: dict) -> CameraStream:
     camera.EXP_DEFAULT = camera_settings["startup_exposure"]
     camera.GAIN_DEFAULT = camera_settings["startup_gain"]
 
+    camera_id_suffix = str(camera_settings["camera_id"])[-5:]
+
     return CameraStream(
-        "alv-cam",
+        camera_id_suffix,
         camera,
         camera_settings["save_root_dir"],
         camera_settings["focal_length_mm"],
