@@ -170,10 +170,12 @@ class Display:
         self.y_rules = pg.PlotDataItem()
         self.x_target = pg.PlotDataItem()
         self.y_target = pg.PlotDataItem()
+        self.target_rect = pg.PlotDataItem()
         self.p1.addItem(self.x_rules)
         self.p1.addItem(self.y_rules)
         self.p1.addItem(self.x_target)
         self.p1.addItem(self.y_target)
+        self.p1.addItem(self.target_rect)
 
         self.offset = 100
         self.traj_bounds_upper = pg.PlotDataItem()
@@ -742,6 +744,58 @@ class Display:
             pen="y",
         )
 
+    # Angular size of the prediction rectangle (degrees)
+    _PRED_RECT_FOV_H_DEG: float = 5.0
+    _PRED_RECT_FOV_V_DEG: float = 5.0
+
+    def draw_prediction_rect(
+        self,
+        target_azel: NDArray,
+        enc_azel: NDArray,
+    ):
+        """Draw a rectangle around the CSV-predicted target position.
+
+        Projects the target using the angular offset between the CSV prediction
+        and the encoder-reported pointing direction, using the camera intrinsic
+        matrix directly — no IMU or NED frame transforms required.
+
+        The rectangle size is defined by _PRED_RECT_FOV_H_DEG x _PRED_RECT_FOV_V_DEG.
+
+        Args:
+            target_azel: Predicted target [az, el] in degrees (from CSV).
+            enc_azel:    Encoder-reported camera pointing [az, el] in degrees.
+        """
+        cam = self._cam_mdl
+        # Focal lengths in sensor pixels from the camera intrinsic matrix
+        fx = float(cam._mat[0, 0])
+        fy = float(cam._mat[1, 1])
+
+        daz_rad = np.deg2rad(target_azel[0] - enc_azel[0])
+        del_rad = np.deg2rad(target_azel[1] - enc_azel[1])
+
+        # Pinhole projection: u = cx + fx*tan(daz), v = cy - fy*tan(del)
+        # (v decreasing upward because image y increases downward)
+        cx_px = cam.res[0] / 2.0
+        cy_px = cam.res[1] / 2.0
+        u_px = cx_px + fx * np.tan(daz_rad)
+        v_px = cy_px - fy * np.tan(del_rad)
+
+        # Scale to display resolution
+        u = u_px * self._scale_factor
+        v = v_px * self._scale_factor
+
+        # Rectangle half-extents in display pixels from angular FOV
+        half_w = fx * np.tan(np.deg2rad(self._PRED_RECT_FOV_H_DEG / 2)) * self._scale_factor
+        half_h = fy * np.tan(np.deg2rad(self._PRED_RECT_FOV_V_DEG / 2)) * self._scale_factor
+
+        # pyqtgraph y-axis is flipped relative to image
+        cy_disp = self._display_res[1] - v
+        cx_disp = u
+
+        xs = [cx_disp - half_w, cx_disp + half_w, cx_disp + half_w, cx_disp - half_w, cx_disp - half_w]
+        ys = [cy_disp - half_h, cy_disp - half_h, cy_disp + half_h, cy_disp + half_h, cy_disp - half_h]
+        self.target_rect.setData(x=xs, y=ys, pen=pg.mkPen("g", width=1, style=pg.Qt.QtCore.Qt.PenStyle.DashLine))
+
     def crosshairs(self):
         self.x_rules.setData(
             y=[
@@ -832,8 +886,17 @@ class Display:
                         try:
                             azel = self._state.encoder_state.azel
                             lab_data["GIM"] = f"Az {azel[0]:>7.1f}  El {azel[1]:>6.1f}"
-                        except:
-                            pass
+                            if self._target is not None and not self._ctx.has_imu_monitor:
+                                try:
+                                    hp = self._target.get_head_pitch(frame.timestamp)
+                                    self.draw_prediction_rect(
+                                        target_azel=hp,
+                                        enc_azel=np.array(azel),
+                                    )
+                                except Exception as e:
+                                    warnings.warn(f"Could not draw prediction rect: {e}")
+                        except Exception as e:
+                            warnings.warn(f"Could not get encoder state: {e}")
 
                     img = self.downscale_img(frame.pixels)
                     saturation_mask = raw_sat_mask
