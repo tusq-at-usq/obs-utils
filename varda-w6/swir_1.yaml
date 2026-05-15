@@ -1,7 +1,0 @@
-camera_id: DEV_1AB22C037C0B
-save_root_dir: "~/W6/swir_1"
-focal_length_mm: 16
-pixel_format: "Mono12"
-sensor_bit_depth: "Bpp12"
-startup_exposure: 20
-startup_gain: 0
