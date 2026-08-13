@@ -310,3 +310,37 @@ class AlviumU130VSWIR(Alvium811):
     SENSOR_SIZE = (1296*5*1e-3, 1032*5*1e-3)
 
 
+class Alvium812UV(Alvium811):
+    NAME = "Alvium_812_UV"
+    MODEL_NO = "812"
+    FRAME_RES = (2848, 2848)
+    SENSOR_SIZE = (2848*2.74*1e-3, 2848*2.74*1e-3)
+
+
+class AlviumAny(Alvium811):
+    """Connect to the first available Alvium camera, whatever model it is.
+
+    Resolution and sensor size are read from the camera hardware after
+    connecting, so no model-specific constants are needed.
+    """
+    NAME = "Alvium"
+    MODEL_NO = ""          # empty string is always `in` any model string
+    FRAME_RES = (1, 1)     # placeholder — overwritten in __enter__
+    SENSOR_SIZE = (1.0, 1.0)
+
+    def __enter__(self) -> "AlviumAny":
+        super().__enter__()
+        # Read actual resolution and pixel size from the connected camera
+        w = int(self._vmbcam.Width.get())
+        h = int(self._vmbcam.Height.get())
+        self.FRAME_RES = (w, h)
+        try:
+            # SensorPixelSize is in µm on most Alvium models
+            px_um = float(self._vmbcam.SensorPixelSize.get())
+        except Exception:
+            px_um = 3.45  # sensible fallback
+        self.SENSOR_SIZE = (w * px_um * 1e-3, h * px_um * 1e-3)
+        self.NAME = f"Alvium_{self._vmbcam.get_model()}"
+        return self
+
+
