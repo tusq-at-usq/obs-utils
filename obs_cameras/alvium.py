@@ -30,6 +30,9 @@ class Alvium811(CameraInterface):
         self.cam_id = None
         self.pixel_format = self.PIXEL_FORMAT
         self.sensor_bit_depth = self.SENSOR_BIT_DEPTH
+        self.binning_horizontal = None
+        self.binning_vertical = None
+        self.binning_mode = None
         self._frame_delivered = threading.Event()
 
 
@@ -139,6 +142,69 @@ class Alvium811(CameraInterface):
                 f"Failed to set sensor bit depth '{self.sensor_bit_depth}' for camera {self.cam_id}."
             ) from exc
 
+    @staticmethod
+    def _normalise_binning_mode(mode: object) -> str | None:
+        if mode in [None, "", "default"]:
+            return None
+
+        mode_str = str(mode).strip().lower()
+        if mode_str == "sum":
+            return "Sum"
+        if mode_str == "average":
+            return "Average"
+        raise ValueError(
+            f"Unsupported binning mode '{mode}'. Use 'sum' or 'average'."
+        )
+
+    def _set_first_available_feature(self, feature_names: list[str], value: object) -> bool:
+        for feature_name in feature_names:
+            feature = getattr(self._vmbcam, feature_name, None)
+            if feature is None:
+                continue
+            try:
+                feature.set(value)
+                return True
+            except Exception:
+                continue
+        return False
+
+    def _apply_binning(self) -> None:
+        if self.binning_horizontal in [None, "", 1] and self.binning_vertical in [None, "", 1]:
+            return
+
+        if self.binning_horizontal not in [None, "", 1]:
+            if not self._set_first_available_feature(["BinningHorizontal"], int(self.binning_horizontal)):
+                warnings.warn(f"Camera {self.cam_id} does not expose BinningHorizontal")
+
+        if self.binning_vertical not in [None, "", 1]:
+            if not self._set_first_available_feature(["BinningVertical"], int(self.binning_vertical)):
+                warnings.warn(f"Camera {self.cam_id} does not expose BinningVertical")
+
+        mode = self._normalise_binning_mode(self.binning_mode)
+        if mode is None:
+            return
+
+        if self._set_first_available_feature(
+            ["BinningMode", "BinningHorizontalMode", "BinningVerticalMode"],
+            mode,
+        ):
+            return
+
+        selector_feature = getattr(self._vmbcam, "BinningSelector", None)
+        mode_feature = getattr(self._vmbcam, "BinningMode", None)
+        if selector_feature is not None and mode_feature is not None:
+            for selector in ("Horizontal", "Vertical", "All"):
+                try:
+                    selector_feature.set(selector)
+                    mode_feature.set(mode)
+                except Exception:
+                    continue
+            return
+
+        warnings.warn(
+            f"Camera {self.cam_id} does not expose a supported binning mode feature"
+        )
+
     def __enter__(self) -> CameraInterface:
         """Enter the runtime context related to this object."""
         _vmb = vmbpy.VmbSystem.get_instance()
@@ -157,6 +223,7 @@ class Alvium811(CameraInterface):
         requested_pixel_format = self._resolve_pixel_format(self.pixel_format)
         self._validate_supported_pixel_format(requested_pixel_format)
         self._vmbcam.set_pixel_format(requested_pixel_format)
+        self._apply_binning()
         self.DTYPE = self._pixel_dtype_for_format(self.pixel_format)
 
         # Read actual resolution from hardware — overrides the class-level constant

@@ -39,6 +39,7 @@ class ObsCLI(threading.Thread):
 
         camera_id = getattr(self._ctx.disp_stream.cam, "cam_id", None)
         pixel_format = getattr(self._ctx.disp_stream.cam, "pixel_format", None)
+        frame_res = getattr(self._ctx.disp_stream.cam, "frame_res", None)
 
         progress_print(f"", "\n")
         print_centred("SCOTI: Spatially Calibrated Optical Tracking and Imaging")
@@ -48,6 +49,8 @@ class ObsCLI(threading.Thread):
             print_centred(f"Camera ID: {camera_id}")
         if pixel_format is not None:
             print_centred(f"Pixel format: {pixel_format}")
+        if frame_res is not None:
+            print_centred(f"Resolution: {frame_res[0]} x {frame_res[1]} px")
 
         while not self._kill_event.is_set():
             try:

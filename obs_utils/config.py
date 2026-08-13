@@ -9,6 +9,8 @@ CAMERA_CONFIG_DEFAULTS: dict = {
     "focal_length_mm": 50,
     "pixel_format": "Mono8",
     "sensor_bit_depth": None,
+    "binning_factor": 1,
+    "binning_mode": None,
     "startup_exposure": 20,
     "startup_gain": 1,
 }
@@ -23,3 +25,26 @@ def load_camera_config(config_path: Path) -> dict:
         loaded = yaml.safe_load(config_file) or {}
 
     return {**CAMERA_CONFIG_DEFAULTS, **loaded}
+
+
+def apply_camera_settings(camera, settings: dict) -> None:
+    """Apply standard config fields to any camera interface object.
+
+    This is the single place where config keys are mapped to camera
+    attributes, so every mission script benefits automatically.
+    """
+    camera.cam_id = settings.get("camera_id")
+    camera.pixel_format = settings["pixel_format"]
+    camera.sensor_bit_depth = settings["sensor_bit_depth"]
+    camera.EXP_DEFAULT = settings["startup_exposure"]
+    camera.GAIN_DEFAULT = settings["startup_gain"]
+
+    # Binning — binning_factor sets both axes; individual overrides take precedence.
+    binning_factor = int(settings.get("binning_factor", 1) or 1)
+    camera.binning_horizontal = int(
+        settings.get("binning_horizontal", binning_factor) or binning_factor
+    )
+    camera.binning_vertical = int(
+        settings.get("binning_vertical", binning_factor) or binning_factor
+    )
+    camera.binning_mode = settings.get("binning_mode")
