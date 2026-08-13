@@ -278,11 +278,15 @@ class Display:
         self.set_text_overlay_location(next_location)
 
     def set_bounds(self):
-        # self.img_size = self._stream.cam.frame_res
-        aspect = self._stream.cam.frame_res[0] / self._stream.cam.frame_res[1]
+        res = (
+            self._stream.cam.monitoring_frame_res
+            if hasattr(self._stream.cam, "monitoring_frame_res")
+            else self._stream.cam.frame_res
+        )
+        aspect = res[0] / res[1]
         height = self._width / aspect
         self._display_res = (int(self._width), int(height))
-        self._scale_factor = self._display_res[0] / self._stream.cam.frame_res[0]
+        self._scale_factor = self._display_res[0] / res[0]
 
         # Set constant bounds for the view
         if self._disp_set.text_overlay_location == "right":
@@ -832,6 +836,12 @@ class Display:
 
     def run(self):
         time.sleep(1)  # Allow some time for everything to start
+        # Re-initialise bounds and crosshairs now that the camera is connected
+        # and FRAME_RES reflects the real hardware resolution.
+        with self._disp_lock:
+            self.set_bounds()
+            self._init_stream()
+            self.crosshairs()
         try:
             while not self._kill_event.is_set():
                 if self._new_stream_event.is_set():

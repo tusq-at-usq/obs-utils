@@ -158,6 +158,12 @@ class Alvium811(CameraInterface):
         self._validate_supported_pixel_format(requested_pixel_format)
         self._vmbcam.set_pixel_format(requested_pixel_format)
         self.DTYPE = self._pixel_dtype_for_format(self.pixel_format)
+
+        # Read actual resolution from hardware — overrides the class-level constant
+        # so that monitoring geometry (crosshairs, scale factor) is always correct.
+        w = int(self._vmbcam.Width.get())
+        h = int(self._vmbcam.Height.get())
+        self.FRAME_RES = (w, h)
         self._vmbcam.DeviceLinkThroughputLimit.set(400e6)
         self._limits = {
             "exposure": self._vmbcam.ExposureTime.get_range(),
@@ -282,12 +288,14 @@ class Alvium811(CameraInterface):
     def convert_for_monitoring(self, frame: Frame) -> Frame:
         # Convert to 8-bit grayscale for monitoring
         pix = frame.pixels
-        # pix = (frame.pixels / 2**4).astype("uint8")
-        # pix = cv2.resize(converted_frame, (self.DISPLAY_RES[1], self.DISPLAY_RES[0]))
-        # pix = cv2.flip(pix, 1)
         pix = cv2.rotate(pix, cv2.ROTATE_90_CLOCKWISE)
         return Frame(pix, frame.gain, frame.exposure, frame.timestamp, frame.cam_name)
-        self._vmbcam.Gain.set(gain)
+
+    @property
+    def monitoring_frame_res(self) -> tuple[int, int]:
+        """Resolution after convert_for_monitoring (width, height), swapped due to 90° rotation."""
+        w, h = self.FRAME_RES
+        return (h, w)
 
     def convert_mask_for_monitoring(self, mask):
         if mask.dtype == bool:
