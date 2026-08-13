@@ -5,7 +5,7 @@ from obs_target.zafiro_azel_target import ZafiroSystemsAzElTarget
 
 # from obs_certus.monitor import CertusMonitor
 from obs_encoders.monitor import EncoderMonitor
-from obs_utils.config import load_camera_config
+from obs_utils.config import load_camera_config, apply_camera_settings
 from obs_utils.context import Context, State
 from obs_cli.cli import ObsCLI
 
@@ -39,11 +39,7 @@ def _build_ground_station_point() -> at.Point:
 
 def _build_camera_stream(camera_settings: dict) -> CameraStream:
     camera = AlviumU130VSWIR()
-    camera.cam_id = camera_settings["camera_id"]
-    camera.pixel_format = camera_settings["pixel_format"]
-    camera.sensor_bit_depth = camera_settings["sensor_bit_depth"]
-    camera.EXP_DEFAULT = camera_settings["startup_exposure"]
-    camera.GAIN_DEFAULT = camera_settings["startup_gain"]
+    apply_camera_settings(camera, camera_settings)
 
     camera_id_suffix = str(camera_settings["camera_id"])[-5:]
 

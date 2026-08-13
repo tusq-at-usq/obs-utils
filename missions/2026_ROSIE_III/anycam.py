@@ -1,11 +1,11 @@
-from obs_cameras.alvium import AlviumU130VSWIR
+from obs_cameras.alvium import AlviumAny
 from obs_cameras.base import CameraStream
 from obs_display.display import Display
 from obs_target.zafiro_azel_target import ZafiroSystemsAzElTarget
 
 # from obs_certus.monitor import CertusMonitor
 from obs_encoders.monitor import EncoderMonitor
-from obs_utils.config import load_camera_config
+from obs_utils.config import load_camera_config, apply_camera_settings
 from obs_utils.context import Context, State
 from obs_cli.cli import ObsCLI
 
@@ -17,7 +17,7 @@ import astrix as at
 
 OverlayMode = Literal["SIMULATE_REENTRY", "CSV_ABSOLUTE_TIME"]
 
-SCRIPT_CAMERA_CONFIG = "swir_filt.yaml"
+SCRIPT_CAMERA_CONFIG = "anycam.yaml"
 SCRIPT_ENCODER_CONFIG = "encoders_config.yaml"
 SCRIPT_AZEL_CSV = "varda-w6/20260519_GS_Az-El_data.csv"
 DEFAULT_OVERLAY_MODE: OverlayMode = "CSV_ABSOLUTE_TIME"
@@ -38,12 +38,8 @@ def _build_ground_station_point() -> at.Point:
 
 
 def _build_camera_stream(camera_settings: dict) -> CameraStream:
-    camera = AlviumU130VSWIR()
-    camera.cam_id = camera_settings["camera_id"]
-    camera.pixel_format = camera_settings["pixel_format"]
-    camera.sensor_bit_depth = camera_settings["sensor_bit_depth"]
-    camera.EXP_DEFAULT = camera_settings["startup_exposure"]
-    camera.GAIN_DEFAULT = camera_settings["startup_gain"]
+    camera = AlviumAny()
+    apply_camera_settings(camera, camera_settings)
 
     camera_id_suffix = str(camera_settings["camera_id"])[-5:]
 

@@ -1,0 +1,10 @@
+camera_id: DEV_1AB22C0242F3
+save_root_dir: "~/2026_ROSIE_III/UV_FILT"
+focal_length_mm: 100
+pixel_format: "Mono12"
+sensor_bit_depth: "Bpp12"
+binning_factor: 2
+binning_mode: "sum"   # change to "sum" for summed 2x2 binning
+startup_exposure: 30
+startup_gain: 0
+filter: "FBH400-10"
