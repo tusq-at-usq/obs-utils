@@ -30,10 +30,39 @@ class Alvium811(CameraInterface):
         self.cam_id = None
         self.pixel_format = self.PIXEL_FORMAT
         self.sensor_bit_depth = self.SENSOR_BIT_DEPTH
+        self.monitor_rotation_deg = 90
+        self.monitor_flip_x = False
+        self.monitor_flip_y = False
         self.binning_horizontal = None
         self.binning_vertical = None
         self.binning_mode = None
+        self._software_trigger_enabled = True
         self._frame_delivered = threading.Event()
+
+    def _normalised_monitor_rotation(self) -> int:
+        rot = int(getattr(self, "monitor_rotation_deg", 0) or 0) % 360
+        if rot not in (0, 90, 180, 270):
+            raise ValueError(
+                f"Unsupported monitor rotation {rot}°. Use one of: 0, 90, 180, 270"
+            )
+        return rot
+
+    def _rotate_for_monitoring(self, img):
+        rot = self._normalised_monitor_rotation()
+        if rot == 0:
+            rotated = img
+        elif rot == 90:
+            rotated = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+        elif rot == 180:
+            rotated = cv2.rotate(img, cv2.ROTATE_180)
+        else:
+            rotated = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        if bool(getattr(self, "monitor_flip_x", False)):
+            rotated = cv2.flip(rotated, 1)
+        if bool(getattr(self, "monitor_flip_y", False)):
+            rotated = cv2.flip(rotated, 0)
+        return rotated
 
 
     @property
@@ -108,6 +137,60 @@ class Alvium811(CameraInterface):
                 f"Supported formats: {supported_names}"
             )
 
+    def _apply_pixel_format(self) -> None:
+        """Apply requested pixel format with robust fallbacks.
+
+        Some camera/firmware combinations raise InternalFault when setting a
+        valid-looking pixel format enum. In that case we fall back to the
+        camera's current format (or first supported format) instead of failing
+        camera connection.
+        """
+        requested_name = str(self.pixel_format)
+        requested = self._resolve_pixel_format(requested_name)
+
+        supported_formats = []
+        if hasattr(self._vmbcam, "get_pixel_formats"):
+            try:
+                supported_formats = list(self._vmbcam.get_pixel_formats())
+            except Exception:
+                supported_formats = []
+
+        candidate_formats: list[object] = [requested]
+
+        current_format = None
+        if hasattr(self._vmbcam, "get_pixel_format"):
+            try:
+                current_format = self._vmbcam.get_pixel_format()
+            except Exception:
+                current_format = None
+        if current_format is not None:
+            candidate_formats.append(current_format)
+
+        for fmt in supported_formats:
+            if fmt not in candidate_formats:
+                candidate_formats.append(fmt)
+
+        last_exc: Exception | None = None
+        for fmt in candidate_formats:
+            try:
+                self._vmbcam.set_pixel_format(fmt)
+                chosen_name = self._pixel_format_name(fmt)
+                if chosen_name != requested_name:
+                    warnings.warn(
+                        f"Could not set requested pixel format '{requested_name}' on camera {self.cam_id}; "
+                        f"using '{chosen_name}' instead."
+                    )
+                self.pixel_format = chosen_name
+                self.DTYPE = self._pixel_dtype_for_format(chosen_name)
+                return
+            except Exception as exc:
+                last_exc = exc
+                continue
+
+        raise RuntimeError(
+            f"Failed to set pixel format '{requested_name}' for camera {self.cam_id}."
+        ) from last_exc
+
     def _pixel_dtype_for_format(self, pixel_format_name: str) -> str:
         if pixel_format_name == "Mono8":
             return "uint8"
@@ -120,9 +203,10 @@ class Alvium811(CameraInterface):
             return
 
         if not hasattr(self._vmbcam, "SensorBitDepth"):
-            raise ValueError(
-                f"Camera {self.cam_id} does not expose a SensorBitDepth feature"
+            warnings.warn(
+                f"Camera {self.cam_id} does not expose SensorBitDepth; continuing without setting it."
             )
+            return
 
         try:
             self._vmbcam.SensorBitDepth.set(self.sensor_bit_depth)
@@ -134,13 +218,17 @@ class Alvium811(CameraInterface):
                 pass
 
             if current_value is not None:
-                raise ValueError(
-                    f"Unsupported sensor bit depth '{self.sensor_bit_depth}' for camera {self.cam_id}. "
-                    f"Current sensor bit depth is '{current_value}'."
-                ) from exc
-            raise ValueError(
-                f"Failed to set sensor bit depth '{self.sensor_bit_depth}' for camera {self.cam_id}."
-            ) from exc
+                warnings.warn(
+                    f"Could not set sensor bit depth '{self.sensor_bit_depth}' for camera {self.cam_id}. "
+                    f"Current sensor bit depth is '{current_value}'. Continuing."
+                )
+                return
+
+            warnings.warn(
+                f"Failed to set sensor bit depth '{self.sensor_bit_depth}' for camera {self.cam_id} "
+                f"({type(exc).__name__}: {exc}). Continuing."
+            )
+            return
 
     @staticmethod
     def _normalise_binning_mode(mode: object) -> str | None:
@@ -218,28 +306,75 @@ class Alvium811(CameraInterface):
             self.__exit__(None, None, None)
             raise RuntimeError("Failed to connect to camera.")
 
-        self._vmbcam.stop_streaming()
+        try:
+            self._vmbcam.stop_streaming()
+        except Exception:
+            pass
         self._apply_sensor_bit_depth()
-        requested_pixel_format = self._resolve_pixel_format(self.pixel_format)
-        self._validate_supported_pixel_format(requested_pixel_format)
-        self._vmbcam.set_pixel_format(requested_pixel_format)
+        try:
+            self._apply_pixel_format()
+        except Exception as exc:
+            warnings.warn(
+                f"Could not apply requested pixel format '{self.pixel_format}' on camera {self.cam_id} "
+                f"({type(exc).__name__}: {exc}). Continuing with camera default/current format."
+            )
+            try:
+                current_format = self._vmbcam.get_pixel_format()
+                current_name = self._pixel_format_name(current_format)
+                self.pixel_format = current_name
+                self.DTYPE = self._pixel_dtype_for_format(current_name)
+            except Exception:
+                pass
         self._apply_binning()
-        self.DTYPE = self._pixel_dtype_for_format(self.pixel_format)
 
         # Read actual resolution from hardware — overrides the class-level constant
         # so that monitoring geometry (crosshairs, scale factor) is always correct.
-        w = int(self._vmbcam.Width.get())
-        h = int(self._vmbcam.Height.get())
+        try:
+            w = int(self._vmbcam.Width.get())
+            h = int(self._vmbcam.Height.get())
+        except Exception as exc:
+            w, h = self.FRAME_RES
+            warnings.warn(
+                f"Could not read Width/Height on camera {self.cam_id} ({type(exc).__name__}: {exc}); "
+                f"using fallback FRAME_RES={self.FRAME_RES}."
+            )
         self.FRAME_RES = (w, h)
-        self._vmbcam.DeviceLinkThroughputLimit.set(400e6)
+        try:
+            self._vmbcam.DeviceLinkThroughputLimit.set(400e6)
+        except Exception:
+            pass
+
         self._limits = {
-            "exposure": self._vmbcam.ExposureTime.get_range(),
-            "exposure_incr": self._vmbcam.ExposureTime.get_increment(),
-            "gain": self._vmbcam.Gain.get_range(),
-            "gain_incr": self._vmbcam.Gain.get_increment(),
+            "exposure": (1.0, 1e7),
+            "exposure_incr": 1.0,
+            "gain": (0.0, 100.0),
+            "gain_incr": 0.1,
         }
-        self.set_exposure(self._exposure_set if self._exposure_set else self.EXP_DEFAULT)
-        self.set_gain(self._gain_set if self._gain_set else self.GAIN_DEFAULT)
+        try:
+            self._limits["exposure"] = self._vmbcam.ExposureTime.get_range()
+            self._limits["exposure_incr"] = self._vmbcam.ExposureTime.get_increment()
+        except Exception:
+            pass
+        try:
+            self._limits["gain"] = self._vmbcam.Gain.get_range()
+            self._limits["gain_incr"] = self._vmbcam.Gain.get_increment()
+        except Exception:
+            pass
+
+        try:
+            self.set_exposure(self._exposure_set if self._exposure_set else self.EXP_DEFAULT)
+        except Exception as exc:
+            warnings.warn(
+                f"Could not set startup exposure on camera {self.cam_id} "
+                f"({type(exc).__name__}: {exc}). Continuing."
+            )
+        try:
+            self.set_gain(self._gain_set if self._gain_set else self.GAIN_DEFAULT)
+        except Exception as exc:
+            warnings.warn(
+                f"Could not set startup gain on camera {self.cam_id} "
+                f"({type(exc).__name__}: {exc}). Continuing."
+            )
         self.start_video()
 
         return self
@@ -247,12 +382,28 @@ class Alvium811(CameraInterface):
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit the runtime context related to this object."""
         if hasattr(self, "_vmbcam"):
-            self._vmbcam.stop_streaming()
-            self._vmbcam.TriggerMode.set("Off")
-            self._vmbcam.AcquisitionMode.set("SingleFrame")
-            self._vmbcam.__exit__(exc_type, exc_val, exc_tb)
+            try:
+                self._vmbcam.stop_streaming()
+            except Exception:
+                pass
+            try:
+                self._vmbcam.TriggerMode.set("Off")
+            except Exception:
+                pass
+            try:
+                self._vmbcam.AcquisitionMode.set("SingleFrame")
+            except Exception:
+                pass
+            try:
+                self._vmbcam.__exit__(exc_type, exc_val, exc_tb)
+            except Exception:
+                pass
             print(f"Alvium {self.MODEL_NO} camera gracefully disconnected.")
-        self._vmb.__exit__(exc_type, exc_val, exc_tb)
+        if hasattr(self, "_vmb"):
+            try:
+                self._vmb.__exit__(exc_type, exc_val, exc_tb)
+            except Exception:
+                pass
 
     def start_video(self) -> None:
         """
@@ -266,11 +417,31 @@ class Alvium811(CameraInterface):
             self._frame_delivered.set()
             cam.queue_frame(frame)
 
-        self._vmbcam.stop_streaming()
-        self._vmbcam.TriggerSource.set("Software")
-        self._vmbcam.TriggerSelector.set("FrameStart")
-        self._vmbcam.TriggerMode.set("On")
-        self._vmbcam.AcquisitionMode.set("Continuous")
+        try:
+            self._vmbcam.stop_streaming()
+        except Exception:
+            pass
+
+        self._software_trigger_enabled = True
+        try:
+            self._vmbcam.TriggerSource.set("Software")
+            self._vmbcam.TriggerSelector.set("FrameStart")
+            self._vmbcam.TriggerMode.set("On")
+        except Exception as exc:
+            self._software_trigger_enabled = False
+            warnings.warn(
+                f"Could not enable software trigger on camera {self.cam_id} "
+                f"({type(exc).__name__}: {exc}); falling back to free-run mode."
+            )
+            try:
+                self._vmbcam.TriggerMode.set("Off")
+            except Exception:
+                pass
+
+        try:
+            self._vmbcam.AcquisitionMode.set("Continuous")
+        except Exception:
+            pass
         self._vmbcam.start_streaming(frame_handler)
 
     def _get_frame(self) -> Frame:
@@ -282,13 +453,31 @@ class Alvium811(CameraInterface):
             Frame: A Frame object containing the image data and metadata
             timestamp: Timestamp when the frame was captured
         """
-        gain = self.gain
-        exposure = self.exposure
+        try:
+            gain = self.gain
+        except Exception:
+            if isinstance(self._gain_set, (int, float)):
+                gain = float(self._gain_set)
+            else:
+                gain = 0.0
+        try:
+            exposure = self.exposure
+        except Exception:
+            exposure = float(self._exposure_set) if self._exposure_set else 0.0
+
         self._frame_delivered.clear()
         timestamp = time.time()
-        self._vmbcam.TriggerSoftware.run()
+        if self._software_trigger_enabled:
+            try:
+                self._vmbcam.TriggerSoftware.run()
+            except Exception as exc:
+                self._software_trigger_enabled = False
+                warnings.warn(
+                    f"TriggerSoftware failed on camera {self.cam_id} "
+                    f"({type(exc).__name__}: {exc}); switching to free-run capture."
+                )
         if self._frame_delivered.wait(timeout=2.0):
-            actual_time = timestamp + (self.exposure / 2) / 1e6
+            actual_time = timestamp + (exposure / 2) / 1e6
             frame = Frame(
                 pixels=self._frame,
                 gain=gain,
@@ -354,21 +543,23 @@ class Alvium811(CameraInterface):
 
     def convert_for_monitoring(self, frame: Frame) -> Frame:
         # Convert to 8-bit grayscale for monitoring
-        pix = frame.pixels
-        pix = cv2.rotate(pix, cv2.ROTATE_90_CLOCKWISE)
+        pix = self._rotate_for_monitoring(frame.pixels)
         return Frame(pix, frame.gain, frame.exposure, frame.timestamp, frame.cam_name)
 
     @property
     def monitoring_frame_res(self) -> tuple[int, int]:
-        """Resolution after convert_for_monitoring (width, height), swapped due to 90° rotation."""
+        """Resolution after convert_for_monitoring (width, height)."""
         w, h = self.FRAME_RES
-        return (h, w)
+        rot = self._normalised_monitor_rotation()
+        if rot in (90, 270):
+            return (h, w)
+        return (w, h)
 
     def convert_mask_for_monitoring(self, mask):
         if mask.dtype == bool:
-            rotated = cv2.rotate(mask.astype("uint8"), cv2.ROTATE_90_CLOCKWISE)
+            rotated = self._rotate_for_monitoring(mask.astype("uint8"))
             return rotated.astype(bool)
-        return cv2.rotate(mask, cv2.ROTATE_90_CLOCKWISE)
+        return self._rotate_for_monitoring(mask)
 
 
 class Alvium508(Alvium811):

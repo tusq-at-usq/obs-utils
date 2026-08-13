@@ -103,6 +103,7 @@ class Display:
         self._new_stream_event = threading.Event()
         self._disp_set = DisplaySettings()
 
+        pg.setConfigOptions(imageAxisOrder="row-major")
         self.app = pg.Qt.mkQApp(name="Video-stream")
         self.win = pg.GraphicsLayoutWidget()
         self.win.setWindowTitle("Display " + str(self._stream.cam.name))
@@ -621,7 +622,7 @@ class Display:
         overlay = np.zeros((saturation_mask.shape[0], saturation_mask.shape[1], 4), dtype=np.uint8)
         overlay[saturation_mask, 0] = 255
         overlay[saturation_mask, 3] = 180
-        self.sat_overlay.setImage(overlay, axis=0)
+        self.sat_overlay.setImage(overlay)
 
     def update_img(self, img, saturation_mask: np.ndarray | None = None):
         """Update the image displayed in the window.
@@ -654,7 +655,7 @@ class Display:
                 warnings.warn("Can't apply colourmap")
                 self.set_colourmap(False)
 
-        self.img.setImage(img, axis=0)
+        self.img.setImage(img)
         try:
             sat_mask = None if saturation_mask is None else saturation_mask.astype(bool)
             self._update_saturation_overlay(sat_mask)
@@ -673,8 +674,46 @@ class Display:
             suffix = f"  [{hint}]" if hint else ""
             self.labs[key].setText(key + ": " + str(item) + suffix)
 
+    def _normalised_monitor_rotation(self) -> int:
+        rot = int(getattr(self._stream.cam, "monitor_rotation_deg", 0) or 0) % 360
+        if rot not in (0, 90, 180, 270):
+            warnings.warn(f"Unsupported monitor_rotation_deg={rot}; using 0")
+            return 0
+        return rot
+
+    def _uv_raw_to_monitor(self, uv: NDArray) -> NDArray:
+        """Map UV points from raw sensor orientation to monitor orientation."""
+        uv_arr = np.asarray(uv, dtype=float)
+        if uv_arr.ndim != 2 or uv_arr.shape[1] != 2:
+            raise ValueError("uv must have shape (N, 2)")
+
+        rot = self._normalised_monitor_rotation()
+        if rot == 0:
+            uv_monitor = uv_arr
+        else:
+            raw_w, raw_h = self._stream.cam.frame_res
+            u = uv_arr[:, 0]
+            v = uv_arr[:, 1]
+
+            if rot == 90:
+                uv_monitor = np.column_stack((raw_h - 1 - v, u))
+            elif rot == 180:
+                uv_monitor = np.column_stack((raw_w - 1 - u, raw_h - 1 - v))
+            else:
+                uv_monitor = np.column_stack((v, raw_w - 1 - u))
+
+        monitor_w, monitor_h = self._stream.cam.monitoring_frame_res
+        if bool(getattr(self._stream.cam, "monitor_flip_x", False)):
+            uv_monitor[:, 0] = (monitor_w - 1) - uv_monitor[:, 0]
+        if bool(getattr(self._stream.cam, "monitor_flip_y", False)):
+            uv_monitor[:, 1] = (monitor_h - 1) - uv_monitor[:, 1]
+
+        return uv_monitor
+
     def update_tracking(self, target: Target, timestamp: float, hpr_euler: NDArray):
         uv_path, uv_pt = target.project_from_ned_angles(hpr_euler, timestamp, self._cam_mdl)
+        uv_path = self._uv_raw_to_monitor(uv_path)
+        uv_pt = self._uv_raw_to_monitor(uv_pt)
         uv_path *= self._scale_factor
         uv_pt *= self._scale_factor
 
@@ -784,20 +823,25 @@ class Display:
         u_px = cx_px + fx * np.tan(daz_rad)
         v_px = cy_px - fy * np.tan(del_rad)
 
-        # Scale to display resolution
-        u = u_px * self._scale_factor
-        v = v_px * self._scale_factor
-
         # Rectangle half-extents in display pixels from angular FOV
-        half_w = fx * np.tan(np.deg2rad(self._PRED_RECT_FOV_H_DEG / 2)) * self._scale_factor
-        half_h = fy * np.tan(np.deg2rad(self._PRED_RECT_FOV_V_DEG / 2)) * self._scale_factor
+        half_w_raw = fx * np.tan(np.deg2rad(self._PRED_RECT_FOV_H_DEG / 2))
+        half_h_raw = fy * np.tan(np.deg2rad(self._PRED_RECT_FOV_V_DEG / 2))
 
-        # pyqtgraph y-axis is flipped relative to image
-        cy_disp = self._display_res[1] - v
-        cx_disp = u
+        corners_raw = np.array(
+            [
+                [u_px - half_w_raw, v_px - half_h_raw],
+                [u_px + half_w_raw, v_px - half_h_raw],
+                [u_px + half_w_raw, v_px + half_h_raw],
+                [u_px - half_w_raw, v_px + half_h_raw],
+                [u_px - half_w_raw, v_px - half_h_raw],
+            ],
+            dtype=float,
+        )
+        corners_monitor = self._uv_raw_to_monitor(corners_raw)
+        corners_monitor *= self._scale_factor
 
-        xs = [cx_disp - half_w, cx_disp + half_w, cx_disp + half_w, cx_disp - half_w, cx_disp - half_w]
-        ys = [cy_disp - half_h, cy_disp - half_h, cy_disp + half_h, cy_disp + half_h, cy_disp - half_h]
+        xs = corners_monitor[:, 0].tolist()
+        ys = (self._display_res[1] - corners_monitor[:, 1]).tolist()
         self.target_rect.setData(x=xs, y=ys, pen=pg.mkPen("g", width=1, style=pg.Qt.QtCore.Qt.PenStyle.DashLine))
 
     def crosshairs(self):

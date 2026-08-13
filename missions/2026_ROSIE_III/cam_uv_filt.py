@@ -1,4 +1,4 @@
-from obs_cameras.alvium import AlviumU130VSWIR
+from obs_cameras.alvium import Alvium812UV
 from obs_cameras.base import CameraStream
 from obs_display.display import Display
 from obs_target.zafiro_azel_target import ZafiroSystemsAzElTarget
@@ -38,7 +38,7 @@ def _build_ground_station_point() -> at.Point:
 
 
 def _build_camera_stream(camera_settings: dict) -> CameraStream:
-    camera = AlviumU130VSWIR()
+    camera = Alvium812UV()
     apply_camera_settings(camera, camera_settings)
 
     camera_id_suffix = str(camera_settings["camera_id"])[-5:]

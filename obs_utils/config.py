@@ -9,6 +9,9 @@ CAMERA_CONFIG_DEFAULTS: dict = {
     "focal_length_mm": 50,
     "pixel_format": "Mono8",
     "sensor_bit_depth": None,
+    "monitor_rotation_deg": 90,
+    "monitor_flip_x": False,
+    "monitor_flip_y": False,
     "binning_factor": 1,
     "binning_mode": None,
     "startup_exposure": 20,
@@ -36,6 +39,9 @@ def apply_camera_settings(camera, settings: dict) -> None:
     camera.cam_id = settings.get("camera_id")
     camera.pixel_format = settings["pixel_format"]
     camera.sensor_bit_depth = settings["sensor_bit_depth"]
+    camera.monitor_rotation_deg = int(settings.get("monitor_rotation_deg", 90) or 0)
+    camera.monitor_flip_x = bool(settings.get("monitor_flip_x", False))
+    camera.monitor_flip_y = bool(settings.get("monitor_flip_y", False))
     camera.EXP_DEFAULT = settings["startup_exposure"]
     camera.GAIN_DEFAULT = settings["startup_gain"]
 
