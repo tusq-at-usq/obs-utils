@@ -73,6 +73,7 @@ class Display:
     _cam_mdl: at.FixedZoomCamera
     _state: State
     _target: Target | None
+    _pred_rect_center: NDArray | None
 
     # _stream: CameraStream
     # _imu_monitor: CertusMonitor | None
@@ -177,6 +178,7 @@ class Display:
         self.p1.addItem(self.x_target)
         self.p1.addItem(self.y_target)
         self.p1.addItem(self.target_rect)
+        self._pred_rect_center = None
 
         self.offset = 100
         self.traj_bounds_upper = pg.PlotDataItem()
@@ -790,6 +792,23 @@ class Display:
     # Angular size of the prediction rectangle (degrees)
     _PRED_RECT_FOV_H_DEG: float = 5.0
     _PRED_RECT_FOV_V_DEG: float = 5.0
+    _PRED_RECT_EMA_ALPHA: float = 0.12
+    _PRED_RECT_DEADBAND_PX: float = 4.0
+
+    def _smooth_pred_rect_center(self, center_xy: NDArray) -> NDArray:
+        if self._pred_rect_center is None:
+            self._pred_rect_center = center_xy.astype(float)
+            return self._pred_rect_center
+
+        delta = float(np.linalg.norm(center_xy - self._pred_rect_center))
+        if delta < self._PRED_RECT_DEADBAND_PX:
+            return self._pred_rect_center
+
+        alpha = float(np.clip(self._PRED_RECT_EMA_ALPHA, 0.0, 1.0))
+        self._pred_rect_center = (
+            alpha * center_xy.astype(float) + (1.0 - alpha) * self._pred_rect_center
+        )
+        return self._pred_rect_center
 
     def draw_prediction_rect(
         self,
@@ -839,6 +858,11 @@ class Display:
         )
         corners_monitor = self._uv_raw_to_monitor(corners_raw)
         corners_monitor *= self._scale_factor
+
+        unsmoothed_center = np.mean(corners_monitor[:4, :], axis=0)
+        smoothed_center = self._smooth_pred_rect_center(unsmoothed_center)
+        center_shift = smoothed_center - unsmoothed_center
+        corners_monitor = corners_monitor + center_shift
 
         xs = corners_monitor[:, 0].tolist()
         ys = (self._display_res[1] - corners_monitor[:, 1]).tolist()
