@@ -10,7 +10,7 @@ from rich.live import Live
 from rich.console import Console
 import serial
 
-from obs_utils.discovery import port_serial_search
+from obs_utils.discovery import list_usb_tty_devices, port_serial_search, port_single_usb_tty
 
 
 class EncoderDisplay:
@@ -150,9 +150,26 @@ class EncoderBroadcaster:
                 if self.ser.is_open:
                     self.ser.close()
 
-            ser_port = port_serial_search(self.config["serials"])
+            configured_serials = self.config.get("serials", [])
+            ser_port = port_serial_search(configured_serials)
+
+            if ser_port is None and self.config.get("auto_detect_single_usb", True):
+                ser_port = port_single_usb_tty()
+                if ser_port is not None:
+                    print(
+                        "No configured serial matched; auto-detected encoder "
+                        f"on /dev/{ser_port}."
+                    )
+
             if ser_port is None:
-                raise RuntimeError("Could not find encoder interface. Is it connected?")
+                connected = list_usb_tty_devices()
+                connected_serials = [
+                    d["serial_short"] or d["serial_full"] or "<no-serial>" for d in connected
+                ]
+                raise RuntimeError(
+                    "Could not find encoder interface. Configured serials="
+                    f"{configured_serials}; detected USB serials={connected_serials}."
+                )
 
             self.ser = serial.Serial(os.path.join("/dev", ser_port), self.config["baudrate"], timeout=1)
             return True

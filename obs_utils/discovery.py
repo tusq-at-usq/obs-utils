@@ -1,6 +1,45 @@
 import pyudev
 from typing import Sequence
 
+
+def list_usb_tty_devices() -> list[dict]:
+    """List connected USB tty devices with common identifying attributes."""
+    context = pyudev.Context()
+    devices: list[dict] = []
+    for device in context.list_devices(subsystem="tty"):
+        if not device.device_node:
+            continue
+        parent = device.find_parent("usb", "usb_device")
+        if parent is None:
+            continue
+
+        serial_short = (
+            device.get("ID_SERIAL_SHORT")
+            or parent.get("ID_SERIAL_SHORT")
+            or ""
+        )
+        serial_full = device.get("ID_SERIAL") or parent.get("ID_SERIAL") or ""
+        vendor_id = parent.get("ID_VENDOR_ID") or ""
+        model_id = parent.get("ID_MODEL_ID") or ""
+
+        devices.append(
+            {
+                "port": device.device_node.split("/")[-1],
+                "serial_short": serial_short,
+                "serial_full": serial_full,
+                "vidpid": f"{vendor_id}:{model_id}" if vendor_id and model_id else "",
+            }
+        )
+    return devices
+
+
+def port_single_usb_tty() -> str | None:
+    """Return a tty port if exactly one USB tty device is present."""
+    devices = list_usb_tty_devices()
+    if len(devices) == 1:
+        return devices[0]["port"]
+    return None
+
 def show_current_vidpid() -> None:
     """Show VID:PID of connected USB devices."""
     context = pyudev.Context()
@@ -40,14 +79,14 @@ def port_by_vidpid(vidpid: str) -> str | None:
 
 def port_by_serial(serial: str) -> str | None:
     """Return /dev/tty* port for given USB serial number."""
-    context = pyudev.Context()
-    for device in context.list_devices(subsystem="tty"):
-        parent = device.find_parent("usb", "usb_device")
-        if parent is None:
+    serial_lower = serial.strip().lower()
+    for device in list_usb_tty_devices():
+        if not serial_lower:
             continue
-        if parent.get("ID_SERIAL_SHORT"):
-            if parent.get("ID_SERIAL_SHORT") == serial:
-                return device.device_node.split("/")[-1]
+        if device["serial_short"].lower() == serial_lower:
+            return device["port"]
+        if device["serial_full"].lower() == serial_lower:
+            return device["port"]
     return None
 
 def port_serial_search(serials: Sequence[str]) -> str | None:
