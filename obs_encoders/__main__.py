@@ -5,8 +5,10 @@ import os
 from .run import EncoderBroadcaster
 
 def main():
-
-    default_config_path = os.path.join(Path.home(), "obs-config/encoders_config.yaml")
+    default_config_path = os.path.join(
+        Path(__file__).resolve().parent,
+        "encoder_config.yaml",
+    )
     broadcaster = EncoderBroadcaster(config_path=default_config_path)
 
     _ = sys.stdout.write(f"\33]0;{'Encoder logging and streaming'}\a")

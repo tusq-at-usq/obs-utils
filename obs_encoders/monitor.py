@@ -14,7 +14,7 @@ ArrayNS: TypeAlias = ModuleType
 
 
 DEFAULT_CONFIG_PATH = os.path.join(
-    pathlib.Path.home(), "obs-config/encoders_config.yaml"
+    pathlib.Path(__file__).resolve().parent, "encoder_config.yaml"
 )
 
 
