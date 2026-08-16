@@ -552,8 +552,12 @@ class CameraStream:
 
         Path(self.save_dir).mkdir(parents=True, exist_ok=True)
         mdata_save_path = os.path.join(self.save_dir, f"metadata_log.csv")
+        write_header = not os.path.exists(mdata_save_path) or os.path.getsize(mdata_save_path) == 0
         with open(mdata_save_path, "a", newline="") as meta_log_file:
             writer = csv.DictWriter(meta_log_file, fieldnames=self._mdata_fnames)
+            if write_header:
+                writer.writeheader()
+                meta_log_file.flush()
 
             while not self._save_killswitch.is_set():
                 try:
