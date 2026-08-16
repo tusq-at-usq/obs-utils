@@ -6,3 +6,6 @@ sensor_bit_depth: "Bpp12"
 startup_exposure: 30
 startup_gain: 0
 filter: "FBH670-10"
+monitor_rotation_deg: 180  # valid: 0, 90, 180, 270
+monitor_flip_x: true
+
