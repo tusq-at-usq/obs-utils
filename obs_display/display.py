@@ -172,12 +172,18 @@ class Display:
         self.y_rules = pg.PlotDataItem()
         self.x_target = pg.PlotDataItem()
         self.y_target = pg.PlotDataItem()
+        self.target_rect_outline = pg.PlotDataItem()
         self.target_rect = pg.PlotDataItem()
+        self.target_rect_crosshairs_outline = pg.PlotDataItem()
+        self.target_rect_crosshairs = pg.PlotDataItem()
         self.p1.addItem(self.x_rules)
         self.p1.addItem(self.y_rules)
         self.p1.addItem(self.x_target)
         self.p1.addItem(self.y_target)
+        self.p1.addItem(self.target_rect_outline)
         self.p1.addItem(self.target_rect)
+        self.p1.addItem(self.target_rect_crosshairs_outline)
+        self.p1.addItem(self.target_rect_crosshairs)
         self._pred_rect_center = None
 
         self.offset = 100
@@ -794,6 +800,8 @@ class Display:
     _PRED_RECT_FOV_V_DEG: float = 5.0
     _PRED_RECT_EMA_ALPHA: float = 0.12
     _PRED_RECT_DEADBAND_PX: float = 4.0
+    # Length of the centre crosshair ticks, drawn inward from each box edge (degrees)
+    _PRED_RECT_CROSSHAIR_DEG: float = 0.5
 
     def _smooth_pred_rect_center(self, center_xy: NDArray) -> NDArray:
         if self._pred_rect_center is None:
@@ -866,7 +874,37 @@ class Display:
 
         xs = corners_monitor[:, 0].tolist()
         ys = (self._display_res[1] - corners_monitor[:, 1]).tolist()
-        self.target_rect.setData(x=xs, y=ys, pen=pg.mkPen("g", width=1, style=pg.Qt.QtCore.Qt.PenStyle.DashLine))
+        # Two-tone (white-on-black outline) for contrast against both bright and dark backgrounds
+        dash_style = pg.Qt.QtCore.Qt.PenStyle.DashLine
+        self.target_rect_outline.setData(x=xs, y=ys, pen=pg.mkPen("k", width=3, style=dash_style))
+        self.target_rect.setData(x=xs, y=ys, pen=pg.mkPen("g", width=1, style=dash_style))
+
+        # Centre crosshair: four short ticks drawn inward from the midpoint of each box edge
+        tick_w_raw = fx * np.tan(np.deg2rad(self._PRED_RECT_CROSSHAIR_DEG))
+        tick_h_raw = fy * np.tan(np.deg2rad(self._PRED_RECT_CROSSHAIR_DEG))
+        ticks_raw = np.array(
+            [
+                [u_px, v_px - half_h_raw], [u_px, v_px - half_h_raw + tick_h_raw],  # top, pointing down
+                [u_px, v_px + half_h_raw], [u_px, v_px + half_h_raw - tick_h_raw],  # bottom, pointing up
+                [u_px - half_w_raw, v_px], [u_px - half_w_raw + tick_w_raw, v_px],  # left, pointing right
+                [u_px + half_w_raw, v_px], [u_px + half_w_raw - tick_w_raw, v_px],  # right, pointing left
+            ],
+            dtype=float,
+        )
+        ticks_monitor = self._uv_raw_to_monitor(ticks_raw)
+        ticks_monitor *= self._scale_factor
+        ticks_monitor = ticks_monitor + center_shift
+
+        tick_xs = ticks_monitor[:, 0].tolist()
+        tick_ys = (self._display_res[1] - ticks_monitor[:, 1]).tolist()
+        self.target_rect_crosshairs_outline.setData(
+            x=tick_xs, y=tick_ys, connect="pairs",
+            pen=pg.mkPen("k", width=3, style=dash_style),
+        )
+        self.target_rect_crosshairs.setData(
+            x=tick_xs, y=tick_ys, connect="pairs",
+            pen=pg.mkPen("g", width=1, style=dash_style),
+        )
 
     def crosshairs(self):
         self.x_rules.setData(
