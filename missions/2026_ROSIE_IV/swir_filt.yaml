@@ -1,0 +1,11 @@
+camera_id: DEV_1AB22C0381E0
+save_root_dir: "~/2026_ROSIE_I//SWIR_FILT"
+focal_length_mm: 50
+pixel_format: "Mono12"
+sensor_bit_depth: "Bpp12"
+startup_exposure: 30
+startup_gain: 0
+filter: "FBH670-10"
+monitor_rotation_deg: 180  # valid: 0, 90, 180, 270
+monitor_flip_x: true
+
