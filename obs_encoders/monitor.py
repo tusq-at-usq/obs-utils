@@ -2,6 +2,8 @@ import os
 import pathlib
 import zmq
 import yaml
+from collections import deque
+from statistics import median
 from dataclasses import dataclass
 import threading
 from typing import Callable
@@ -85,6 +87,19 @@ class EncoderMonitor(threading.Thread):
     _kill_event: threading.Event
     _swap_az_el: bool
 
+    # Median filter applied to az/el before values reach sinks (overlay/prediction
+    # consumers only). Raw values and the CSV log written by the broadcaster are
+    # never touched by this filter.
+    #
+    # _FILTER_WINDOW: number of recent samples kept. Must be odd for a clean median.
+    # _SPIKE_THRESHOLD_DEG: a new sample whose distance from the current median
+    #   exceeds this value (degrees) is discarded outright and never enters the
+    #   buffer, preventing spikes from poisoning future medians.
+    #   Overridden by config key `max_rate_deg_per_sec` (physics-based gate takes
+    #   precedence when a previous timestamp is available).
+    _FILTER_WINDOW = 7
+    _SPIKE_THRESHOLD_DEG = 5.0
+
     def __init__(
         self,
         config_filepath=DEFAULT_CONFIG_PATH,
@@ -100,6 +115,8 @@ class EncoderMonitor(threading.Thread):
         else:
             self._swap_az_el = swap_az_el
 
+        self._max_rate = float(self.config.get("max_rate_deg_per_sec", 60.0))
+
         if callable(sink):
             self._sinks = [sink]
         elif isinstance(sink, Iterable):
@@ -107,6 +124,9 @@ class EncoderMonitor(threading.Thread):
         else:
             self._sinks = None
         self._kill_event = threading.Event()
+        self._az_buf = deque(maxlen=self._FILTER_WINDOW)
+        self._el_buf = deque(maxlen=self._FILTER_WINDOW)
+        self._last_accepted: EncoderState | None = None
 
     def __enter__(self):
         self._context = zmq.Context()
@@ -138,6 +158,60 @@ class EncoderMonitor(threading.Thread):
             t=state.t,
         )
 
+    def _filter_state(self, state: EncoderState) -> EncoderState:
+        """Reject physically impossible samples, then median-smooth for sinks.
+
+        Raw counts are passed through unchanged — only the sink-facing az/el are
+        smoothed here. The CSV log written by the broadcaster in run.py is produced
+        upstream of this filter and is unaffected.
+
+        Two-stage rejection:
+        1. Rate gate (physics): if a previous accepted sample exists, compute the
+           implied angular rate for az and el separately.  Any axis whose rate
+           exceeds `max_rate_deg_per_sec` (config) flags the whole sample as a
+           spike and the sample is dropped without touching the buffers.
+        2. Spike gate (fallback): when the buffer is warm but no rate can be
+           computed (first sample, or identical timestamps), reject values that
+           deviate from the current median by more than _SPIKE_THRESHOLD_DEG.
+        3. Median smoothing: output is the median of the accepted window, giving
+           additional robustness against any outliers that slip through.
+        """
+        last = self._last_accepted
+
+        if last is not None and (state.t - last.t) > 0:
+            dt = state.t - last.t
+            az_rate = abs(state.az - last.az) / dt
+            el_rate = abs(state.el - last.el) / dt
+            if az_rate > self._max_rate or el_rate > self._max_rate:
+                # Physically impossible — drop the sample entirely
+                az_out = median(self._az_buf) if self._az_buf else last.az
+                el_out = median(self._el_buf) if self._el_buf else last.el
+                return EncoderState(az=az_out, el=el_out,
+                                    az_raw=state.az_raw, el_raw=state.el_raw,
+                                    t=state.t)
+        else:
+            # Fallback spike gate: deviation from current median
+            def _over_threshold(value: float, buf: deque) -> bool:
+                return len(buf) > 0 and abs(value - median(buf)) > self._SPIKE_THRESHOLD_DEG
+
+            if _over_threshold(state.az, self._az_buf) or _over_threshold(state.el, self._el_buf):
+                az_out = median(self._az_buf) if self._az_buf else state.az
+                el_out = median(self._el_buf) if self._el_buf else state.el
+                return EncoderState(az=az_out, el=el_out,
+                                    az_raw=state.az_raw, el_raw=state.el_raw,
+                                    t=state.t)
+
+        self._az_buf.append(state.az)
+        self._el_buf.append(state.el)
+        self._last_accepted = state
+        return EncoderState(
+            az=median(self._az_buf),
+            el=median(self._el_buf),
+            az_raw=state.az_raw,
+            el_raw=state.el_raw,
+            t=state.t,
+        )
+
     def run(self) -> None:
         """Get the latest azimuth and elevation from the ZMQ stream."""
         try:
@@ -154,6 +228,7 @@ class EncoderMonitor(threading.Thread):
                         t=float(data["Sec"]),
                     )
                     state = self._apply_axis_config(state)
+                    state = self._filter_state(state)
 
                     if self._sinks:
                         for sink in self._sinks:

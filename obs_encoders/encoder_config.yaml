@@ -5,5 +5,6 @@ protocol: "IPC" # IPC or "TCP" if across multiple computers
 pub_address: "/tmp/encoders.sock" # or e.g. "*:5000" for TCP
 sub_address: "/tmp/encoders.sock" # or e.g. "localhost:5000" for TCP
 swap_az_el: true
+max_rate_deg_per_sec: 60.0  # Physical slew rate limit; samples implying faster motion are rejected
 baudrate: 115200 # Encoder default
 serials: ["A703YD9I", "A703YDI7"]
