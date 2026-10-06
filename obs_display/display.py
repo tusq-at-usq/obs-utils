@@ -848,7 +848,7 @@ class Display:
         cx_px = cam.res[0] / 2.0
         cy_px = cam.res[1] / 2.0
         u_px = cx_px + fx * np.tan(daz_rad)
-        v_px = cy_px - fy * np.tan(del_rad)
+        v_px = cy_px + fy * np.tan(del_rad)  # changed to from - (minus) to + fy * ... [david b. 4 pm 26 Aug 26]
 
         # Rectangle half-extents in display pixels from angular FOV
         half_w_raw = fx * np.tan(np.deg2rad(self._PRED_RECT_FOV_H_DEG / 2))
