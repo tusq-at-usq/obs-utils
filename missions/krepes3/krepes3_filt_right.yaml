@@ -1,0 +1,12 @@
+camera_id: DEV_1AB22C050B18
+save_root_dir: "~/2026_KREPES3/FILT_RIGHT"
+focal_length_mm: 50
+pixel_format: "Mono12"
+sensor_bit_depth: "Bpp12"
+startup_exposure: 30
+startup_gain: 0
+filter: "FBH670-10"
+monitor_rotation_deg: 180  # valid: 0, 90, 180, 270; 270 = 90° CCW
+monitor_flip_x: false
+monitor_flip_y: false
+

@@ -1,0 +1,13 @@
+camera_id: DEV_1AB22C0242F3
+save_root_dir: "~/2026_KREPES3/UV_SPEC"
+focal_length_mm: 25
+pixel_format: "Mono12"
+sensor_bit_depth: null
+monitor_rotation_deg: 0  # valid: 0, 90, 180, 270; 270 = 90° CCW
+monitor_flip_x: false
+monitor_flip_y: true
+binning_factor: 1
+binning_mode: "sum"   # set to "average" for averaged 2x2 binning
+startup_exposure: 30
+startup_gain: 0
+filter: "600grating"
