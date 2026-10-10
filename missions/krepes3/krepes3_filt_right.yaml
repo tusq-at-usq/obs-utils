@@ -7,6 +7,8 @@ startup_exposure: 30
 startup_gain: 0
 filter: "FBH670-10"
 monitor_rotation_deg: 180  # valid: 0, 90, 180, 270; 270 = 90° CCW
-monitor_flip_x: false
+monitor_flip_x: true
 monitor_flip_y: false
+binning_factor: 2
+binning_mode: "sum"   # set to "average" for averaged 2x2 binning
 

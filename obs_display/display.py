@@ -907,16 +907,14 @@ class Display:
         )
 
     def crosshairs(self):
+        # TEMP (alignment): continuous lines so the crosshairs intersect.
+        # Revert to y=[1/8, 3/8, 5/8, 7/8] (and x likewise below) for the centre gap.
         self.x_rules.setData(
             y=[
                 1 * self._display_res[1] / 8,
-                3 * self._display_res[1] / 8,
-                5 * self._display_res[1] / 8,
                 7 * self._display_res[1] / 8,
             ],
             x=[
-                self._display_res[0] / 2,
-                self._display_res[0] / 2,
                 self._display_res[0] / 2,
                 self._display_res[0] / 2,
             ],
@@ -927,13 +925,9 @@ class Display:
             y=[
                 self._display_res[1] / 2,
                 self._display_res[1] / 2,
-                self._display_res[1] / 2,
-                self._display_res[1] / 2,
             ],
             x=[
                 1 * self._display_res[0] / 8,
-                3 * self._display_res[0] / 8,
-                5 * self._display_res[0] / 8,
                 7 * self._display_res[0] / 8,
             ],
             connect="pairs",

@@ -1,10 +1,12 @@
 camera_id: DEV_1AB22C00E6C9
 save_root_dir: "~/2026_KREPES3/TRACK"
-focal_length_mm: 35
+focal_length_mm: 50
 pixel_format: "Mono12"
 sensor_bit_depth: "Bpp12"
 monitor_rotation_deg: 180  # valid: 0, 90, 180, 270
 monitor_flip_x: true
+binning_factor: 2
+binning_mode: "sum"   # set to "average" for averaged 2x2 binning
 startup_exposure: 30
 startup_gain: 0
-filter: ""
+filter: "nil"

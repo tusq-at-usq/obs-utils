@@ -97,9 +97,10 @@ class Alvium811(CameraInterface):
         cam_dict = {}
         cams = self._vmb.get_all_cameras()
         for cam in cams:
+            # Model/ID come from the camera info and don't need the camera
+            # opened. Opening here would touch cameras owned by other processes.
             try:
-                with cam:
-                    cam_dict[cam] = {"Model": cam.get_model(), "ID": cam.get_id()}
+                cam_dict[cam] = {"Model": cam.get_model(), "ID": cam.get_id()}
             except vmbpy.error.VmbCameraError:
                 pass
         return cam_dict
@@ -293,8 +294,24 @@ class Alvium811(CameraInterface):
             f"Camera {self.cam_id} does not expose a supported binning mode feature"
         )
 
+    @staticmethod
+    def _check_usbfs_memory(min_mb: int = 1000) -> None:
+        # Linux defaults usbfs to 16 MB shared by all USB cameras; a single
+        # unbinned Mono12 812 frame is ~16 MB, so a second camera starves.
+        try:
+            with open("/sys/module/usbcore/parameters/usbfs_memory_mb") as f:
+                mb = int(f.read().strip())
+        except (OSError, ValueError):
+            return
+        if 0 < mb < min_mb:
+            warnings.warn(
+                f"usbfs_memory_mb is {mb} MB; multiple Alvium USB cameras need ~{min_mb}. "
+                f"Run: sudo sh -c 'echo {min_mb} > /sys/module/usbcore/parameters/usbfs_memory_mb'"
+            )
+
     def __enter__(self) -> CameraInterface:
         """Enter the runtime context related to this object."""
+        self._check_usbfs_memory()
         _vmb = vmbpy.VmbSystem.get_instance()
         self._vmb = _vmb.__enter__()
         time.sleep(0.1)
@@ -329,9 +346,11 @@ class Alvium811(CameraInterface):
 
         # Read actual resolution from hardware — overrides the class-level constant
         # so that monitoring geometry (crosshairs, scale factor) is always correct.
+        # Width/Height are post-binning; FRAME_RES is stored unbinned and
+        # frame_res applies the binning factors.
         try:
-            w = int(self._vmbcam.Width.get())
-            h = int(self._vmbcam.Height.get())
+            w = int(self._vmbcam.Width.get()) * int(self.binning_horizontal or 1)
+            h = int(self._vmbcam.Height.get()) * int(self.binning_vertical or 1)
         except Exception as exc:
             w, h = self.FRAME_RES
             warnings.warn(
@@ -547,9 +566,18 @@ class Alvium811(CameraInterface):
         return Frame(pix, frame.gain, frame.exposure, frame.timestamp, frame.cam_name)
 
     @property
+    def frame_res(self) -> tuple[int, int]:
+        """Delivered frame resolution (width, height), accounting for binning."""
+        w, h = self.FRAME_RES
+        return (
+            w // int(self.binning_horizontal or 1),
+            h // int(self.binning_vertical or 1),
+        )
+
+    @property
     def monitoring_frame_res(self) -> tuple[int, int]:
         """Resolution after convert_for_monitoring (width, height)."""
-        w, h = self.FRAME_RES
+        w, h = self.frame_res
         rot = self._normalised_monitor_rotation()
         if rot in (90, 270):
             return (h, w)
@@ -596,10 +624,8 @@ class AlviumAny(Alvium811):
 
     def __enter__(self) -> "AlviumAny":
         super().__enter__()
-        # Read actual resolution and pixel size from the connected camera
-        w = int(self._vmbcam.Width.get())
-        h = int(self._vmbcam.Height.get())
-        self.FRAME_RES = (w, h)
+        # Resolution (unbinned) was read from hardware in super().__enter__
+        w, h = self.FRAME_RES
         try:
             # SensorPixelSize is in µm on most Alvium models
             px_um = float(self._vmbcam.SensorPixelSize.get())
