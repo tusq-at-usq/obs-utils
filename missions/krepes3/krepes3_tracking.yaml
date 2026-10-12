@@ -1,5 +1,5 @@
 camera_id: DEV_1AB22C00E6C9
-save_root_dir: "~/2026_KREPES3/TRACK"
+save_root_dir: "~/KREPE3_S3/TRACK"
 focal_length_mm: 50
 pixel_format: "Mono12"
 sensor_bit_depth: "Bpp12"

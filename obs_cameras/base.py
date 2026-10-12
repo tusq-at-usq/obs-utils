@@ -583,7 +583,7 @@ class CameraStream:
                     # Save frame with metadata
                     img_save_path = os.path.join(
                         self.save_dir,
-                        f"f_{frame_num:06d}_{self.name}_{frame.timestamp:.2f}.npy",
+                        f"{self.save_root_dir.name}_{frame_num:06d}_{self.name}_{frame.timestamp:.2f}.npy",
                     )
                     np.save(
                         img_save_path,
