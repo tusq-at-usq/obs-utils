@@ -8,5 +8,5 @@ monitor_flip_x: true
 binning_factor: 2
 binning_mode: "sum"   # set to "average" for averaged 2x2 binning
 startup_exposure: 30
-startup_gain: 0
+startup_gain: 36
 filter: "nil"

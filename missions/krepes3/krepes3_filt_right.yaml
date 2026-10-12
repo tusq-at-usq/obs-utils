@@ -4,7 +4,7 @@ focal_length_mm: 50
 pixel_format: "Mono12"
 sensor_bit_depth: "Bpp12"
 startup_exposure: 30
-startup_gain: 0
+startup_gain: 36
 filter: "FBH940-10"
 monitor_rotation_deg: 180  # valid: 0, 90, 180, 270; 270 = 90° CCW
 monitor_flip_x: true
