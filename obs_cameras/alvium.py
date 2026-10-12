@@ -549,7 +549,8 @@ class Alvium811(CameraInterface):
         Args:
             gain: Gain value
         """
-        if isinstance(gain, float):
+        if isinstance(gain, (int, float)):
+            gain = float(gain)  # YAML parses whole numbers (e.g. startup_gain: 0) as int
             if 0 < gain - self.gain < self._limits["gain_incr"]:
                 gain = self.gain + self._limits["gain_incr"]
             elif 0 > gain - self.gain > -self._limits["gain_incr"]:
